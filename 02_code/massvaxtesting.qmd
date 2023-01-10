@@ -13,7 +13,9 @@ pacman::p_load(malariasimulation,
                malariaEquilibrium,
                reshape2,
                DiagrammeR,
-               cowplot)
+               cowplot,
+               dplyr,
+               tidyr)
 ```
 
 ### Initial Parameters
@@ -21,11 +23,11 @@ pacman::p_load(malariasimulation,
 ```{r}
 year <- 365
 month <- 30
-sim_length <- 3 * year
+sim_length <- 7 * year
 human_population <- 10000
 starting_EIR <- 20
 starting_EIRs <- c(5,20,50)
-warmup <- 3*year
+warmup <- 0*year
 ```
 
 ```{r}
@@ -41,14 +43,21 @@ peak <- list()
 first <- list()
 timesteps <- list()
 boosters <- list()
+
 for (i in 1:length(starting_EIRs)){
  simparamsall[[i]] <- set_equilibrium(simparams, starting_EIRs[i])
+ 
  # setting rtss parameters 
  peak[[i]] <- peak_season_offset(simparamsall[[i]])
+ 
  first[[i]] <- round(warmup + (peak[[i]] - month * 3.5), 0)
+ 
  timesteps[[i]] <- c(first[[i]], first[[i]]+seq(year, sim_length, year)) # starting after warmup and before peak, then once per year
+ 
  simparamsall[[i]]$rtss_doses <- round(c(0, 1 * month, 2 * month))
+ 
  fifth <- 0
+ 
  boosters[[i]] <- if(fifth == 0) round(c(12 * month + 2 * month)) else round(c(12 * month + 2 * month, 24 * month + 2 * month))
 }
 
@@ -62,9 +71,9 @@ plot_func <- function(x){
   
   outp <- output[[x]] %>%
     filter(timestep > warmup) %>%
-    mutate(timestep2 = timestep-warmup,
-           year = ceiling(timestep2/year),
-           month = ceiling(timestep2/month)) %>%
+    mutate(timestep = timestep - warmup,
+           year = ceiling(timestep/year),
+           month = ceiling(timestep/month)) %>%
     select(c(year, month, 
              starts_with('n_inc'), starts_with('p_inc'),starts_with('n_rtss'), starts_with('n_'),
              -n_bitten, p_detect_730_3650, -timestep)) %>%
@@ -96,6 +105,7 @@ plot_func <- function(x){
 ggplot(data = outp, aes(x = month, y = inc*1000)) + 
     geom_line(col = 'grey80') +
     stat_smooth(col = 'darkblue',se = T) +
+    geom_vline(xintercept =c(13), col = "red") +
     # geom_vline(xintercept =c(5,6,8,17,18,20,22, 29,31,32,34), col = "red") +
     # geom_vline(xintercept =c(22, 34), col = "blue") +
     facet_wrap(~age_grp, labeller = as_labeller(age_names), scales = "free") +
@@ -116,7 +126,7 @@ rtssparamsall <- list()
 for (i in 1:length(simparamsall)) {
   rtssparamsall[[i]] <- set_mass_rtss(
     simparamsall[[i]],
-    timesteps = 1 * year,#timesteps,# # for each round of vaccinations
+    timesteps = warmup + 1 * year,#timesteps,# # for each round of vaccinations
     coverages = rep(0.9, length(timesteps[[i]])), # for each round of vaccinations
     min_wait = 0,
     min_ages = 5 * year,
@@ -145,6 +155,7 @@ for (i in 1:length(rtssparamsall)){
 #     theme_bw()
 # }
 plot5y_15y <- plot_grid(plot_func(1), plot_func(2), plot_func(3),labels ='AUTO')
+plot5y_15y
 ```
 
 ### 5 months - 5 years
@@ -157,12 +168,12 @@ rtssparamsall <- list()
 for (i in 1:length(simparamsall)) {
   rtssparamsall[[i]] <- set_mass_rtss(
     simparamsall[[i]],
-    timesteps = timesteps,#1 * year, # for each round of vaccinations
-    coverages = rep(0.9, length(timesteps)), # for each round of vaccinations
+    timesteps = warmup + 1 * year, # for each round of vaccinations
+    coverages = rep(0.9, length(timesteps[[i]])), # for each round of vaccinations
     min_wait = 0,
     min_ages = 5 * month,
     max_ages = 5 * year,
-    boosters = boosters,#18 * month,
+    boosters = boosters[[i]],#18 * month,
     booster_coverage = 0.8 # prop of vaccinated pop who will receive booster vaccine
   )
 }
@@ -172,20 +183,21 @@ for (i in 1:length(rtssparamsall)){
   output[[i]] <- run_simulation(sim_length+warmup, rtssparamsall[[i]])
 }
 
-output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_150_1825 / output[[1]]$n_150_1825
-output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_150_1825 / output[[2]]$n_150_1825
-output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_150_1825 / output[[3]]$n_150_1825
-
-plot_func <- function(i){
-  ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
-    geom_line(col = "grey80") +
-    stat_smooth(col = "darkblue", se = FALSE) +
-    geom_vline(xintercept = 1, col = "red") +
-    xlab("year") +
-    ylab(paste0("Clinical incidence \n (per 1000 children aged \n5 mos-5 yrs),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
-    theme_bw()
-}
+# output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_150_1825 / output[[1]]$n_150_1825
+# output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_150_1825 / output[[2]]$n_150_1825
+# output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_150_1825 / output[[3]]$n_150_1825
+# 
+# plot_func <- function(i){
+#   ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
+#     geom_line(col = "grey80") +
+#     stat_smooth(col = "darkblue", se = FALSE) +
+#     geom_vline(xintercept = 1, col = "red") +
+#     xlab("year") +
+#     ylab(paste0("Clinical incidence \n (per 1000 children aged \n5 mos-5 yrs),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
+#     theme_bw()
+# }
 plot_5m_5y <- plot_grid(plot_func(1), plot_func(2), plot_func(3),labels ='AUTO')
+plot_5m_5y
 ```
 
 ### 5 - 17 months
@@ -198,12 +210,12 @@ rtssparamsall <- list()
 for (i in 1:length(simparamsall)) {
   rtssparamsall[[i]] <- set_mass_rtss(
     simparamsall[[i]],
-    timesteps = timesteps,#1 * year, # for each round of vaccinations
-    coverages = rep(0.9,length(timesteps)), # for each round of vaccinations
+    timesteps = warmup + 1 * year, # for each round of vaccinations
+    coverages = rep(0.9,length(timesteps[[i]])), # for each round of vaccinations
     min_wait = 0,
     min_ages = 5 * month,
     max_ages = 17 * month,
-    boosters = boosters,#18 * month,
+    boosters = boosters[[i]],#18 * month,
     booster_coverage = 0.8 # prop of vaccinated pop who will receive booster vaccine
   )
 }
@@ -213,20 +225,21 @@ for (i in 1:length(rtssparamsall)){
   output[[i]] <- run_simulation(sim_length+warmup, rtssparamsall[[i]])
 }
 
-output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_150_510 / output[[1]]$n_150_510
-output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_150_510 / output[[2]]$n_150_510
-output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_150_510 / output[[3]]$n_150_510
-
-plot_func <- function(i){
-  ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
-    geom_line(col = "grey80") +
-    stat_smooth(col = "darkblue", se = FALSE) +
-    geom_vline(xintercept = 1, col = "red") +
-    xlab("year") +
-    ylab(paste0("Clinical incidence \n (per 1000 children aged \n5 mos-17 mos),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
-    theme_bw()
-}
+# output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_150_510 / output[[1]]$n_150_510
+# output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_150_510 / output[[2]]$n_150_510
+# output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_150_510 / output[[3]]$n_150_510
+# 
+# plot_func <- function(i){
+#   ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
+#     geom_line(col = "grey80") +
+#     stat_smooth(col = "darkblue", se = FALSE) +
+#     geom_vline(xintercept = 1, col = "red") +
+#     xlab("year") +
+#     ylab(paste0("Clinical incidence \n (per 1000 children aged \n5 mos-17 mos),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
+#     theme_bw()
+# }
 plot_5m_17m <- plot_grid(plot_func(1), plot_func(2), plot_func(3), labels ='AUTO')
+plot_5m_17m
 ```
 
 ## With lower coverage and 20% drop off for 4th dose
@@ -239,12 +252,12 @@ rtssparamsall <- list()
 for (i in 1:length(simparamsall)) {
   rtssparamsall[[i]] <- set_mass_rtss(
     simparamsall[[i]],
-    timesteps = timesteps,#1 * year, # for each round of vaccinations
-    coverages = rep(0.8, length(timesteps)), # for each round of vaccinations
+    timesteps = warmup + 1 * year, # for each round of vaccinations
+    coverages = rep(0.8, length(timesteps[[i]])), # for each round of vaccinations
     min_wait = 0,
     min_ages = 5 * year,
     max_ages = 15 * year,
-    boosters = boosters,#18 * month,
+    boosters = boosters[[i]],#18 * month,
     booster_coverage = 0.64 # prop of vaccinated pop who will receive booster vaccine
   )
 }
@@ -254,21 +267,21 @@ for (i in 1:length(rtssparamsall)){
   output[[i]] <- run_simulation(sim_length+warmup, rtssparamsall[[i]])
 }
 
-output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_1825_5475 / output[[1]]$n_1825_5475
-output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_1825_5475 / output[[2]]$n_1825_5475
-output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_1825_5475 / output[[3]]$n_1825_5475
-
-plot_func <- function(i){
-  ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
-    geom_line(col = "grey80") +
-    stat_smooth(col = "darkblue", se = FALSE) +
-    geom_vline(xintercept = 1, col = "red") +
-    xlab("year") +
-    ylab(paste0("Clinical incidence \n (per 1000 children aged \n5-15 yrs),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
-    theme_bw()
-}
+# output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_1825_5475 / output[[1]]$n_1825_5475
+# output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_1825_5475 / output[[2]]$n_1825_5475
+# output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_1825_5475 / output[[3]]$n_1825_5475
+# 
+# plot_func <- function(i){
+#   ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
+#     geom_line(col = "grey80") +
+#     stat_smooth(col = "darkblue", se = FALSE) +
+#     geom_vline(xintercept = 1, col = "red") +
+#     xlab("year") +
+#     ylab(paste0("Clinical incidence \n (per 1000 children aged \n5-15 yrs),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
+#     theme_bw()
+# }
 plot5y_15y <- plot_grid(plot_func(1), plot_func(2), plot_func(3),labels ='AUTO')
-
+plot5y_15y
 ```
 ### All children up to 15: 5months -15 years
 
@@ -281,12 +294,12 @@ rtssparamsall <- list()
 for (i in 1:length(simparamsall)) {
   rtssparamsall[[i]] <- set_mass_rtss(
     simparamsall[[i]],
-    timesteps = timesteps,#1 * year, # for each round of vaccinations
-    coverages = rep(0.8,length(timesteps)), # for each round of vaccinations
+    timesteps = warmup + 1 * year, # for each round of vaccinations
+    coverages = rep(0.8,length(timesteps[[i]])), # for each round of vaccinations
     min_wait = 0,
     min_ages = 5 * month,
     max_ages = 15 * year,
-    boosters = boosters,#18 * month,
+    boosters = boosters[[i]],#18 * month,
     booster_coverage = 0.64 # prop of vaccinated pop who will receive booster vaccine
   )
 }
@@ -296,21 +309,21 @@ for (i in 1:length(rtssparamsall)){
   output[[i]] <- run_simulation(sim_length+warmup, rtssparamsall[[i]])
 }
 
-output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_150_5475 / output[[1]]$n_150_5475
-output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_150_5475 / output[[2]]$n_150_5475
-output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_150_5475 / output[[3]]$n_150_5475
-
-plot_func <- function(i){
-  ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
-    geom_line(col = "grey80") +
-    stat_smooth(col = "darkblue", se = FALSE) +
-    geom_vline(xintercept = 1, col = "red") +
-    xlab("year") +
-    ylab(paste0("Clinical incidence \n (per 1000 children aged \n5mos-15 yrs),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
-    theme_bw()
-}
+# output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_150_5475 / output[[1]]$n_150_5475
+# output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_150_5475 / output[[2]]$n_150_5475
+# output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_150_5475 / output[[3]]$n_150_5475
+# 
+# plot_func <- function(i){
+#   ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
+#     geom_line(col = "grey80") +
+#     stat_smooth(col = "darkblue", se = FALSE) +
+#     geom_vline(xintercept = 1, col = "red") +
+#     xlab("year") +
+#     ylab(paste0("Clinical incidence \n (per 1000 children aged \n5mos-15 yrs),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
+#     theme_bw()
+# }
 plot5m_15y <- plot_grid(plot_func(1), plot_func(2), plot_func(3),labels ='AUTO')
-
+plot5m_15y
 ```
 
 ### 5 months - 5 years
@@ -323,12 +336,12 @@ rtssparamsall <- list()
 for (i in 1:length(simparamsall)) {
   rtssparamsall[[i]] <- set_mass_rtss(
     simparamsall[[i]],
-    timesteps = timesteps,#1 * year, # for each round of vaccinations
-    coverages = rep(0.8, length(timesteps)), # for each round of vaccinations
+    timesteps = warmup + 1 * year, # for each round of vaccinations
+    coverages = rep(0.8, length(timesteps[[i]])), # for each round of vaccinations
     min_wait = 0,
     min_ages = 5 * month,
     max_ages = 5 * year,
-    boosters = boosters,#18 * month,
+    boosters = boosters[[i]],#18 * month,
     booster_coverage = 0.64 # prop of vaccinated pop who will receive booster vaccine
   )
 }
@@ -338,20 +351,21 @@ for (i in 1:length(rtssparamsall)){
   output[[i]] <- run_simulation(sim_length+warmup, rtssparamsall[[i]])
 }
 
-output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_150_1825 / output[[1]]$n_150_1825
-output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_150_1825 / output[[2]]$n_150_1825
-output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_150_1825 / output[[3]]$n_150_1825
-
-plot_func <- function(i){
-  ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
-    geom_line(col = "grey80") +
-    stat_smooth(col = "darkblue", se = FALSE) +
-    geom_vline(xintercept = 1, col = "red") +
-    xlab("year") +
-    ylab(paste0("Clinical incidence \n (per 1000 children aged \n5 mos-5 yrs),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
-    theme_bw()
-}
+# output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_150_1825 / output[[1]]$n_150_1825
+# output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_150_1825 / output[[2]]$n_150_1825
+# output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_150_1825 / output[[3]]$n_150_1825
+# 
+# plot_func <- function(i){
+#   ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
+#     geom_line(col = "grey80") +
+#     stat_smooth(col = "darkblue", se = FALSE) +
+#     geom_vline(xintercept = 1, col = "red") +
+#     xlab("year") +
+#     ylab(paste0("Clinical incidence \n (per 1000 children aged \n5 mos-5 yrs),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
+#     theme_bw()
+# }
 plot_5m_5y <- plot_grid(plot_func(1), plot_func(2), plot_func(3),labels ='AUTO')
+plot_5m_5y
 ```
 
 ### 5 - 17 months
@@ -365,12 +379,12 @@ rtssparamsall <- list()
 for (i in 1:length(simparamsall)) {
   rtssparamsall[[i]] <- set_mass_rtss(
     simparamsall[[i]],
-    timesteps = timesteps,#1 * year, # for each round of vaccinations
-    coverages = rep(0.8,length(timesteps)), # for each round of vaccinations
+    timesteps = warmup + 1 * year, # for each round of vaccinations
+    coverages = rep(0.8,length(timesteps[[i]])), # for each round of vaccinations
     min_wait = 0,
     min_ages = 5 * month,
     max_ages = 17 * month,
-    boosters = boosters,#18 * month,
+    boosters = boosters[[i]],#18 * month,
     booster_coverage = 0.64 # prop of vaccinated pop who will receive booster vaccine
   )
 }
@@ -380,20 +394,21 @@ for (i in 1:length(rtssparamsall)){
   output[[i]] <- run_simulation(sim_length+warmup, rtssparamsall[[i]])
 }
 
-output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_150_510 / output[[1]]$n_150_510
-output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_150_510 / output[[2]]$n_150_510
-output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_150_510 / output[[3]]$n_150_510
-
-plot_func <- function(i){
-  ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
-    geom_line(col = "grey80") +
-    stat_smooth(col = "darkblue", se = FALSE) +
-    geom_vline(xintercept = 1, col = "red") +
-    xlab("year") +
-    ylab(paste0("Clinical incidence \n (per 1000 children aged \n5 mos-17 mos),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
-    theme_bw()
-}
+# output[[1]]$clinical_incidence <- 1000 * output[[1]]$n_inc_150_510 / output[[1]]$n_150_510
+# output[[2]]$clinical_incidence <- 1000 * output[[2]]$n_inc_150_510 / output[[2]]$n_150_510
+# output[[3]]$clinical_incidence <- 1000 * output[[3]]$n_inc_150_510 / output[[3]]$n_150_510
+# 
+# plot_func <- function(i){
+#   ggplot(data = output[[i]], aes(x = timestep / 365, y = clinical_incidence)) + 
+#     geom_line(col = "grey80") +
+#     stat_smooth(col = "darkblue", se = FALSE) +
+#     geom_vline(xintercept = 1, col = "red") +
+#     xlab("year") +
+#     ylab(paste0("Clinical incidence \n (per 1000 children aged \n5 mos-17 mos),", {paste0('EIR=', ifelse(i == 1, starting_EIRs[1], ifelse(i == 2,starting_EIRs[2],ifelse(i ==3,starting_EIRs[3]))))})) +
+#     theme_bw()
+# }
 plot_5m_17m <- plot_grid(plot_func(1), plot_func(2), plot_func(3), labels ='AUTO')
+plot_5m_17m
 ```
 
 
@@ -406,6 +421,7 @@ month <- 30
 sim_length <- 3 * year
 human_population <- 10000
 starting_EIR <- 20
+warmup <- 3*year
 
 # First, run '02_code/create_scenarios.R'
 # source('create_scenarios.R')
@@ -418,9 +434,10 @@ params <- set_equilibrium(par2, init_EIR = starting_EIR)
 output <- run_simulation(warmup + sim_length, params)
 
 output_fin <- output %>%
-  filter(timestep > 3285) %>%
+  filter(timestep > warmup) %>%
   # statistics by month
-  mutate(year = ceiling(timestep/year),
+  mutate(timestep = timestep - warmup,
+         year = ceiling(timestep/year),
          month = ceiling(timestep/month)) %>%
   # group_by(year, month) %>%
   mutate_at(vars(n_0_91.25:n_36500_73000, n_730_3650,

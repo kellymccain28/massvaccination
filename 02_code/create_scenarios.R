@@ -118,8 +118,8 @@ generate_params(paste0(path, '03_output/runscenarios.rds'), # file path to pull
 
 
 # Run tasks --------------------------------------------------------------------
-x = c(1:nrow(combo)) # runs
-
-index <- crossing(x)
+# x = c(1:nrow(combo)) # runs
+# 
+# index <- crossing(x)
 
 ### unsure how to run these***
