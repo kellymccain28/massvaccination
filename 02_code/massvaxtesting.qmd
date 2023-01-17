@@ -16,6 +16,8 @@ pacman::p_load(malariasimulation,
                cowplot,
                dplyr,
                tidyr)
+
+source('plot_clin_inc.R')
 ```
 
 ### Initial Parameters
@@ -63,58 +65,6 @@ for (i in 1:length(starting_EIRs)){
 
 age_names <- c('0-0.42'='0-0.42 yrs', '0.42-5'='0.42-5 yrs','5-10'='5-10 yrs','10-15'='10-15 yrs','15-20'='15-20 yrs','20-25'='20-25 yrs')
 ```
-
-#### Plot function
-```{r}
-plot_func <- function(x){
-  starting_EIRs <- c(5,20,50)
-  
-  outp <- output[[x]] %>%
-    filter(timestep > warmup) %>%
-    mutate(timestep = timestep - warmup,
-           year = ceiling(timestep/year),
-           month = ceiling(timestep/month)) %>%
-    select(c(year, month, 
-             starts_with('n_inc'), starts_with('p_inc'),starts_with('n_rtss'), starts_with('n_'),
-             -n_bitten, p_detect_730_3650, -timestep)) %>%
-    group_by(month, year) %>%
-    mutate_at(vars(n_0_153.3:n_7300_9125, n_730_3650,
-                   n_detect_730_3650, p_detect_730_3650), mean, na.rm = TRUE) %>%
-    mutate_at(vars(n_inc_clinical_0_153.3:p_inc_clinical_7300_9125,
-                   n_treated, n_infections), sum, na.rm = TRUE) %>%
-    pivot_longer(cols = c(n_0_153.3:n_7300_9125,
-                        n_inc_clinical_0_153.3:n_inc_clinical_7300_9125),
-               names_to = c('age'), values_to = c('value')) %>%
-  mutate(n = ifelse(grepl('n_[[:digit:]]', age), value, NA),             # creating var for age group
-         inc_clinical = ifelse(grepl('n_inc_clinical', age), value, NA), # creating var for inc_clinical
-         age = gsub('n_inc_clinical_', '', age),                         # combining age vars
-         age = gsub('n_', '', age),
-         age = gsub('_', '-', age)) %>% 
-    group_by(age, year, month) %>%
-    select(-c(value)) %>%
-    mutate_at(vars(n:inc_clinical), sum, na.rm = TRUE) %>% # consolidate
-    distinct() %>% ungroup() %>%
-    separate(col = age, into = c("age_lower", "age_upper"), sep="-", remove = F) %>%
-    mutate(age_lower = as.numeric(age_lower)/365,
-           age_upper = as.numeric(age_upper)/365,
-           age_grp = paste(age_lower, age_upper, sep = '-'),
-           age_grp = factor(age_grp, levels =c('0-0.42', '0.42-5','5-10','10-15','15-20','20-25')),
-           inc = inc_clinical / n,
-           cases = inc_clinical)
-  
-ggplot(data = outp, aes(x = month, y = inc*1000)) + 
-    geom_line(col = 'grey80') +
-    stat_smooth(col = 'darkblue',se = T) +
-    geom_vline(xintercept =c(13), col = "red") +
-    # geom_vline(xintercept =c(5,6,8,17,18,20,22, 29,31,32,34), col = "red") +
-    # geom_vline(xintercept =c(22, 34), col = "blue") +
-    facet_wrap(~age_grp, labeller = as_labeller(age_names), scales = "free") +
-    xlab("Month after warmup period") +
-    ylab(paste0("Clinical incidence \n (per 1000 children", {paste0('EIR=', ifelse(x == 1, starting_EIRs[1], ifelse(x == 2, starting_EIRs[2],ifelse(x ==3,starting_EIRs[3], NA))))})) +
-    theme_bw()
-}
-```
-
 
 ### School aged children
 
@@ -243,6 +193,7 @@ plot_5m_17m
 ```
 
 ## With lower coverage and 20% drop off for 4th dose
+
 ### School aged children 5-15 years
 
 ```{r}
@@ -283,6 +234,7 @@ for (i in 1:length(rtssparamsall)){
 plot5y_15y <- plot_grid(plot_func(1), plot_func(2), plot_func(3),labels ='AUTO')
 plot5y_15y
 ```
+
 ### All children up to 15: 5months -15 years
 
 ```{r}
@@ -411,7 +363,6 @@ plot_5m_17m <- plot_grid(plot_func(1), plot_func(2), plot_func(3), labels ='AUTO
 plot_5m_17m
 ```
 
-
 ## Adding other interventions
 
 ```{r}
@@ -490,4 +441,3 @@ output_fin <- output_fin %>%
 # plotting the output
 
 ```
-

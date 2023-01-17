@@ -39,6 +39,7 @@ library(didehpc)
 # plotting
 library(patchwork)
 library(LaCroixColoR)      # devtools::install_github('johannesbjork/LaCroixColoR')
+library(ggplot2)
 
 # color palette
 # lacroix_palette(type = "paired")
