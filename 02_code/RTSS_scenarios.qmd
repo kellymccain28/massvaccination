@@ -1,0 +1,749 @@
+---
+title: "RTS,S mass vaccination tests"
+author: Kelly McCain
+date: "`r format(Sys.time(), '%d %B %Y')`"
+execute:
+  warning: false
+  message: false
+output: 
+  html_document:
+    theme: flatly
+    highlight: tango
+    code_folding: show
+    toc: true
+    toc_depth: 4
+    toc_float: true
+format:
+  html:
+    page-layout: full
+editor: visual
+---
+
+```{r}
+# pacman::p_load(malariasimulation,
+#                ggplot2,
+#                mgcv,
+#                malariaEquilibrium,
+#                reshape2,
+#                DiagrammeR,
+#                cowplot,
+#                dplyr,
+#                tidyr,
+#                patchwork,
+#                foresite)
+# 
+# knitr::opts_knit$set(message=FALSE, warning=FALSE)
+# 
+# source("Functions/simple_plots.R")
+# 
+# `young children` <- 'lightblue'
+# `under 5s` <- 'maroon'
+# `school-aged` <- 'skyblue4'
+# `all children` <- 'palegreen4'
+# everyone <- 'tomato3'
+# 
+# col_SV_models <- list(`young children`, `under 5s`, `school-aged`, `all children`,everyone)
+# 
+# set.seed(12345)
+source("packages_data.R")
+```
+
+### Set up basic parameters
+
+```{r}
+year <- 365
+month <- 30
+sim_length <- 12 * year #12 for warmup and simlength
+human_population <- 10000
+# starting_EIR <- 20
+program_start <- round(0.5 * year)
+warmup <- 9 * year
+
+# To be able to loop over starting EIRs
+init_EIR <- list(3, 20, 50) # initial pfpr2-10s c(0.03,0.05,0.1,0.15,0.2,0.25,0.35,0.45,0.55,0.65)
+
+params <- get_parameters(list(
+    human_population = human_population,
+    model_seasonality = TRUE,
+    #These seasonal params are from the seasonal values in Hillary's code (locally malariavax2G_2/02_code/B_PfPR_EIR_match.R)
+    g0 = 0.285505,
+    g = c(-0.325352,-0.0109352,0.0779865),
+    h = c(-0.132815,0.104675,-0.013919),
+    individual_mosquitoes = FALSE
+  )
+)
+
+# Set prevalence rendering
+params$prevalence_rendering_min_ages = 2 * year
+params$prevalence_rendering_max_ages = 10 * year
+
+# Set clinical incidence rendering 
+params$clinical_incidence_rendering_min_ages = c(0, 5*month, 0, seq(0, year*20, by = 1*year))
+params$clinical_incidence_rendering_max_ages = c(5 * year, 17*month, 15*year,seq(year*1, year*21, by = 1*year))
+
+# Set severe incidence rendering 
+params$severe_incidence_rendering_min_ages = c(0, 5*month, 0, seq(0, year*20, by = 1*year))
+params$severe_incidence_rendering_max_ages = c(5 * year, 17*month, 15*year,seq(year*1, year*21, by = 1*year))
+
+params <- set_drugs(
+  params,
+  list(AL_params, SP_AQ_params)
+)
+
+params <- set_species(
+  params, 
+  species = list(arab_params, fun_params, gamb_params),
+  proportions = c(0.25, 0.25, 0.5)
+)
+```
+
+Get median parameters from 50 parameter draws (from parameter_draws.R)
+```{r}
+## PUlling in median parameters from the 50 parameter draws
+d <- readRDS("../01_data/median_parameters.rds")
+
+# over-write malariasimulation parameters to match the parameter draw
+params$dd = d$dur_D
+params$dt = d$dur_T
+params$da = d$dur_A # value 195 from the old model is the right one! New says 200
+params$du = d$dur_U
+params$sigma_squared = d$sigma2
+params$rm = d$dm
+params$rvm = d$dvm
+params$rb = d$db
+params$rc = d$dc
+params$rva = d$dv
+params$rid =	d$dd
+params$b0 = d$bh
+params$b1 = d$bmin
+params$ib0 = d$IB0
+params$kb = d$kb
+params$ub = d$ub
+params$uc = d$uc
+params$uv = d$uv
+params$ud = d$ud
+params$cd = d$cD
+params$gamma1 = d$gamma_inf
+params$cu = d$cU
+params$ct = d$cT # values in malariasim are more precise
+params$a0 = d$a0
+params$rho = d$rho
+params$phi0 = d$phi0
+params$phi1 = d$phi1
+params$ic0 = d$IC0
+params$kc = d$kc
+params$theta0 = d$theta0
+params$theta1 = d$theta1
+params$kv = d$kv
+params$fv0 = d$fv0
+params$av = d$av0
+params$gammav = d$gammav
+params$iv0 = d$IV0
+params$de = d$dur_E
+params$delay_gam = d$latgam
+params$dem = d$latmosq
+params$fd0 = d$fd0
+params$ad = d$ad0
+params$gammad = d$gammad
+params$d1 = d$dmin / 1000
+params$id0 = d$ID0
+params$kd = d$kd
+params$average_age = round(1 / d$eta)
+params$pcm = d$P_IC_M
+params$pvm = d$P_IV_M
+```
+
+## Add SMC (for now only in seasonal settings - 5 doses)
+
+```{r}
+peak <- peak_season_offset(params)
+
+first <- round(c(peak + c(-2, -1, 0, 1, 2) * month), 0)
+firststeps <- sort(rep(first, (warmup + sim_length)/year))
+yearsteps <- rep(c(0, seq(year, (warmup + sim_length) - year, year)), length(first))
+timesteps <- yearsteps + firststeps
+
+# This is from hillary's code (generate_params.R) 25.1.23
+params$drug_prophylaxis_scale <- c(10.6, 39.34)
+params$drug_prophylaxis_shape <- c(11.3, 3.40)
+
+params <- set_smc(
+        parameters = params,
+        drug = 2,
+        timesteps = sort(timesteps),
+        coverages = rep(0.75, length(timesteps)),
+        min_age = rep(round(5 * month), length(timesteps)),
+        max_age = rep(round(5 * year), length(timesteps)))
+```
+
+## Add treatment (ACT)
+
+```{r}
+params <- set_clinical_treatment(
+  params, 
+  drug = 1, # AL - artemether-lumefantrine
+  1, # timestep when the coverage begins 
+  0.45 # 45% coverage
+)
+```
+
+### Add bed nets
+
+```{r}
+# timesteps <- seq(0, (sim_length+warmup), year)
+# # dn0:gamman are from the vignette
+# params <- set_bednets(
+#   params,
+#   timesteps = timesteps,
+#   coverages = rep(0.8, length(timesteps)),
+#   retention = 5 * year,
+#   dn0 = matrix(rep(.533, length(timesteps)), nrow=length(timesteps), ncol=3), # matrix of death probs for each species over time
+#   rn = matrix(rep(.56, length(timesteps)), nrow=length(timesteps), ncol=3), # matrix of repelling probs for each species over time
+#   rnm = matrix(rep(.24, length(timesteps)), nrow=length(timesteps), ncol=3), # matrix of min repelling probs for each species over time
+#   gamman = rep(2.64 * 365, length(timesteps)) # vector of bednet half lives for each dist timestep
+# )
+```
+
+### Add IRS
+
+```{r}
+# params <- set_spraying(
+#         parameters = params,
+#         timesteps = seq(1, sim_length + warmup, year),
+#         coverages = rep(0.5, (sim_length + warmup)/year), # trying out with 80% coverage
+#         ls_theta = matrix(c(rep(2.025, (sim_length + warmup)/year),
+#                             rep(2.025, (sim_length + warmup)/year),
+#                             rep(2.025, (sim_length + warmup)/year)),
+#                           nrow=(sim_length + warmup)/year, ncol=3),
+#         ls_gamma = matrix(c(rep(-0.009, (sim_length + warmup)/year),
+#                             rep(-0.009, (sim_length + warmup)/year),
+#                             rep(-0.009, (sim_length + warmup)/year)),
+#                           nrow=(sim_length + warmup)/year, ncol=3),
+#         ks_theta = matrix(c(rep(-2.222, (sim_length + warmup)/year),
+#                             rep(-2.222, (sim_length + warmup)/year),
+#                             rep(-2.222, (sim_length + warmup)/year)),
+#                           nrow=(sim_length + warmup)/year, ncol=3),
+#         ks_gamma = matrix(c(rep(0.008, (sim_length + warmup)/year),
+#                             rep(0.008, (sim_length + warmup)/year),
+#                             rep(0.008, (sim_length + warmup)/year)),
+#                           nrow=(sim_length + warmup)/year, ncol=3),
+#         ms_theta = matrix(c(rep(-1.232, (sim_length + warmup)/year),
+#                             rep(-1.232, (sim_length + warmup)/year),
+#                             rep(-1.232, (sim_length + warmup)/year)),
+#                           nrow=(sim_length + warmup)/year, ncol=3),
+#         ms_gamma = matrix(c(rep(-0.009, (sim_length + warmup)/year),
+#                             rep(-0.009, (sim_length + warmup)/year),
+#                             rep(-0.009, (sim_length + warmup)/year)),
+#                           nrow=(sim_length + warmup)/year, ncol=3)
+#       )
+```
+
+### (H, A) EPI vaccination
+
+```{r}
+timesteps <- warmup + program_start
+peak <- peak_season_offset(params)
+
+EPI_model <- function(timesteps, seasonal_boosters, init_EIR, label){
+  
+  params$rtss_doses <- round(c(1, 2 * month, 3 * month))
+  
+  if (seasonal_boosters == TRUE) { # if this is true, then it is the hybrid strategy 
+    boosters <- round(peak - month * 3.5, 0)
+    min_wait <- 6*month
+  } else {
+    boosters <- 12 * month
+    min_wait <- 0 } # if not seasonal, then min acceptable time since last vaccination 
+  
+  params <- set_rtss_epi(
+    params,
+    timesteps = timesteps, 
+    coverages = 0.85, 
+    min_wait = min_wait,#6 * month, # at least 6 months between 3rd dose and booster
+    age = round(5 * month),
+    boosters = boosters,# ,#+ c(0, year),
+    booster_coverage = rep(0.8, length(boosters)) , # prop of vaccinated population who will receive booster vaccine
+    seasonal_boosters = seasonal_boosters) # if logical, then the first booster timestep is relative to the start of the year; otherwise relative to last dose
+  
+  if (seasonal_boosters == TRUE) {
+    # To increase booster titre up to the same as 3rd dose (only for seasonal and hybrid)
+    params$rtss_cs_boost <- c(6.37008, 0.35) 
+    }
+  
+  # For synergy with SMC 
+  params$rtss_beta <- 70.9
+  params$rtss_alpha <- 0.868
+  params$rtss_vmax <- 0.843
+  params$rtss_cs_boost <- c(6.37008, 0.35)
+  params$drug_prophylaxis_scale <- c(10.6, 45.76)
+  params$drug_prophylaxis_shape <- c(11.3, 2.87)
+
+  params$clinical_incidence_rendering_min_ages <- c(0, 5*month,0, seq(0, year*20, by = 1*year))
+  params$clinical_incidence_rendering_max_ages = c(5 * year, 17*month, 15 * year, seq(year*1, year*21, by = 1*year))
+  
+  params <- set_equilibrium(params, init_EIR)
+  
+  output <- run_simulation(sim_length + warmup, params)
+  
+  output <- output %>%
+    filter(timestep > warmup) %>%
+    mutate(timestep = timestep - warmup,
+           clinical_incidence_0_1825 = 1000 * n_inc_clinical_0_1825 / n_0_1825,
+           clinical_incidence_0_5475 = 1000 * n_inc_clinical_0_5475 / n_0_5475,
+           severe_incidence_0_1825 = 1000 * n_inc_severe_0_1825 / n_0_1825,
+           prevalence_730_3650 = 1000 * n_detect_730_3650 / n_730_3650,
+           model = label,
+           starting_EIR = init_EIR)
+  
+  return(output)
+}
+
+
+dat1 <- lapply(
+  init_EIR,
+  function(init){
+    EPI_model(timesteps, seasonal_boosters =TRUE, init, "hybrid")
+  }
+)
+
+dat2 <- lapply(
+  init_EIR,
+  function(init){
+    EPI_model(timesteps, seasonal_boosters =FALSE, init, "age-based")
+  }
+)
+
+dat1 <- bind_rows(dat1, .id = dat1$init_EIR)
+dat2 <- bind_rows(dat2, .id = dat2$init_EIR)
+output <- bind_rows(dat1, dat2)
+
+doses <- output |> 
+  select(timestep, model, n_rtss_epi_dose_1:n_rtss_epi_booster_1) |>
+  pivot_longer(n_rtss_epi_dose_1:n_rtss_epi_booster_1, names_to = "dose", values_to = "count") |>
+  mutate(month = ceiling(timestep / month)) |>
+  group_by(month, dose, model) |>
+  summarize(count = sum(count))
+
+# plot doses
+dosesplot <- ggplot(data = doses) + 
+  geom_col(aes(x = month, y = count, fill = dose)) +
+  geom_vline(xintercept = program_start / month, lty = 2) + 
+  geom_vline(xintercept = (peak / month) + seq(year, sim_length, by = year)/month, lty = 1) +
+  annotate("text", x = 25, y = 600, label = "peak seasonality") +
+  facet_wrap(~ model, nrow = 3, ncol = 2) + 
+  xlab("month") +
+  ylab("doses") +
+  theme_bw()
+
+# plot clinical incidence
+clin_inc <- ggplot(data = output, aes(x = timestep / year, y = clinical_incidence_0_1825)) +
+  geom_line(col = "grey80") +
+  geom_vline(xintercept = program_start / year, col = "red") +
+  stat_smooth(col = "darkblue", se = FALSE) +
+  facet_wrap(~ model, nrow = 3, ncol = 2) + 
+  xlab("year") +
+  ylab("Clinical incidence \n (per 1000 children aged 0-5)") +
+  theme_bw()
+
+
+# Cumulative raw cases in last 5 years of simulation by age group 
+# n_inc_clinical
+# n_inc_severe
+d <- output %>%
+  filter(timestep >= max(timestep)-5*year) %>%
+  select(c(timestep, model,
+           starts_with('n_inc_cl'), -n_inc_clinical_0_1825, -n_inc_clinical_0_5475, -n_inc_clinical_150_510,
+           starts_with('n_inc_se'), -n_inc_severe_0_1825, -n_inc_severe_0_5475, -n_inc_severe_150_510)) %>%
+  pivot_longer(cols = c(n_inc_clinical_0_365:n_inc_clinical_7300_7665,
+                        n_inc_severe_0_365:n_inc_severe_7300_7665),
+               names_to = 'age',
+               values_to = 'value') %>%
+  mutate(inc_clinical = ifelse(grepl('n_inc_clinical', age), value, NA),
+         inc_severe = ifelse(grepl('n_inc_severe', age), value, NA),
+         age = gsub('n_inc_clinical_', '', age),
+         age = gsub('n_inc_severe_', '', age),
+         clin = ifelse(is.na(inc_clinical), 0,1)) %>% select(-value) %>%
+  group_by(age, model, clin) %>%
+  summarize(cum_clin_cases = sum(inc_clinical),
+            cum_sev_cases = sum(inc_severe),
+            model = model) %>%
+  separate(col = age, into = c("age_lower", "age_upper"), sep="_", remove = F) %>%
+  mutate(age_lower = as.numeric(age_lower)/365,
+         age_upper = as.numeric(age_upper)/365,
+         age_grp = paste(age_lower, age_upper, sep = '-'),
+         age_grp = ordered(age_grp, levels = c('0-1','1-2','2-3','3-4','4-5','5-6','6-7','7-8','8-9','9-10','10-11','11-12','12-13','13-14','14-15','15-16','16-17','17-18','18-19','19-20','20-21'))) %>% distinct()
+
+cum_clin_cases <- ggplot(subset(d, d$clin ==1), aes(x = age_grp, y = cum_clin_cases)) +
+  geom_col(fill = 'lightblue', color = 'grey50', alpha = 0.7, position = 'dodge') + 
+  geom_text(aes(x = age_grp, y = cum_clin_cases, label = cum_clin_cases), vjust = -0.3, size = 3) +
+  facet_wrap(~model) +
+  theme_minimal() +
+  labs(title = paste0('Cumulative clinical cases by age group in last 5 years of simulation')) + 
+  theme(axis.text.x = element_text(angle = 90))
+
+# cum_clin_cases <- ggplot(subset(d, d$clin ==1), aes(x = age_grp, y = cum_clin_cases, group = model)) +
+#   geom_col(aes(fill = model), color = 'grey50', alpha = 0.7, position = 'dodge') + 
+#   # geom_col(fill = 'lightblue', color = 'grey50', alpha = 0.7, position = 'dodge') + 
+#   geom_text(aes(x = age_grp, y = cum_clin_cases,label = cum_clin_cases), vjust = -0.3, size = 2.5, position = position_dodge(width = .9)) +
+#   # facet_wrap(~model) +
+#   scale_fill_manual(values = col_mod) +
+#   theme_minimal() +
+#   labs(title = paste0('Cumulative clinical cases by age group in last 5 years of simulation')) + 
+#   theme(axis.text.x = element_text(angle = 90))
+
+cum_sev_cases <- ggplot(subset(d, clin ==0), aes(x = age_grp, y = cum_sev_cases)) +
+  geom_col(fill = 'maroon', color = 'grey50', alpha = 0.7) + 
+  geom_text(aes(x = age_grp, y = cum_sev_cases,label = cum_sev_cases), vjust = -0.3, size = 3) +
+  facet_wrap(~model) +
+  theme_minimal() +
+  labs(title = paste0('Cumulative severe cases by age group in last 5 years of simulation')) + 
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r}
+clin_inc
+```
+
+```{r}
+dosesplot
+```
+
+```{r}
+cum_clin_cases
+```
+
+```{r}
+cum_sev_cases
+```
+
+
+### (SV) Seasonal vaccination by age group
+
+```{r}
+peak <- peak_season_offset(params)
+
+# One round of vaccination 
+timesteps <- round(peak - month * 3.5 + warmup)#seq(warmup, sim_length+warmup, by = year))
+boosters <- round(c(1*year))
+
+# trying rounds every 3 years for example
+# timesteps <- round(peak - month * 3.5 + warmup) + seq(0, sim_length, by = year * 3)
+# boosters <- round(c(1*year))
+      
+SV_age_groups <- function(min_ages, max_ages, starting_EIR, label){
+  
+  params$rtss_doses <- round(c(0, 1 * month, 2 * month))
+  
+  params <- set_mass_rtss(
+    params,
+    timesteps = timesteps, 
+    coverages = rep(0.85, length(timesteps)), 
+    min_wait = 1*month, 
+    min_age = min_ages,
+    max_age = max_ages, 
+    boosters = boosters, #timesteps following initial vaccination 
+    booster_coverage = rep(0.8, length(boosters)) # prop of vaccinated pop who will receive booster vaccine
+)
+  
+    # To increase booster titre up to the same as 3rd dose  (only for seasonal and hybrid)
+  params$rtss_cs_boost <- c(6.37008, 0.35) 
+  
+  params <- set_equilibrium(params, starting_EIR)
+  
+  output <- run_simulation(sim_length + warmup, params)
+  
+  output <- output %>%
+    filter(timestep > warmup) %>%
+    mutate(timestep = timestep - warmup,
+           clinical_incidence_0_1825 = 1000 * n_inc_clinical_0_1825 / n_0_1825,
+           clinical_incidence_0_5475 = 1000 * n_inc_clinical_0_5475 / n_0_5475,
+           severe_incidence_0_1825 = 1000 * n_inc_severe_0_1825 / n_0_1825,
+           prevalence_730_3650 = 1000 * n_detect_730_3650 / n_730_3650,
+           model = label,
+           starting_EIR = starting_EIR)
+  
+  return(output)
+}
+
+dat1 <- lapply(
+  init_EIR,
+  function(init){
+    SV_age_groups(5 * month, 17 * month, init, "young children")
+  }
+)
+
+dat2 <- lapply(
+  init_EIR,
+  function(init){
+    SV_age_groups(5 * month, 5 * year, init, "under 5s")
+  }
+)
+
+dat3 <- lapply(
+  init_EIR,
+  function(init){
+    SV_age_groups(5 * year, 15 * year, init, "school-aged")
+  }
+)
+
+dat4 <- lapply(
+  init_EIR,
+  function(init){
+    SV_age_groups(5 * month, 15 * year, init, "all children")
+  }
+)
+
+dat5 <- lapply(
+  init_EIR,
+  function(init){
+    SV_age_groups(5 * month, 100 * year, init, "everyone")
+  }
+)
+
+dat1 <- bind_rows(dat1, .id = dat1$init_EIR)
+dat2 <- bind_rows(dat2, .id = dat2$init_EIR)
+dat3 <- bind_rows(dat3, .id = dat3$init_EIR)
+dat4 <- bind_rows(dat4, .id = dat4$init_EIR)
+dat5 <- bind_rows(dat5, .id = dat5$init_EIR)
+output <- bind_rows(dat1, dat2, dat3, dat4, dat5)
+
+doses <- output |> 
+  select(timestep, model, n_rtss_mass_dose_1:n_rtss_mass_booster_1) |>
+  pivot_longer(n_rtss_mass_dose_1:n_rtss_mass_booster_1, names_to = "dose", values_to = "count") |>
+  mutate(month = ceiling(timestep / month)) |>
+  group_by(month, dose, model) |>
+  summarize(count = sum(count))
+
+# plot doses
+dosesplot <- ggplot(data = doses) + 
+  geom_col(aes(x = month, y = count, fill = dose)) +
+  geom_vline(xintercept = (timesteps-warmup) / month, lty = 2) + # start of vaccination campaign
+  geom_vline(xintercept = (peak / month) + c(0,year, year*2, year*3, year*6, year*9)/month, lty = 1) + # peak transmission 
+  annotate("text", x = 25, y = 6000, label = "peak transmission") +
+  facet_wrap(~ model, nrow = 3, ncol = 2) + 
+  xlab("month") +
+  ylab("doses") +
+  theme_bw()
+
+# plot clinical incidence
+clin_inc <- output %>%
+  mutate(year = ceiling(timestep/year)) %>%
+  group_by(year, model) %>%
+  summarize(n_inc_clinical_0_1825_annual = sum(n_inc_clinical_0_1825),
+            # person time in years
+            PT_0_1825 = sum(n_0_1825)/365,
+            yr_clin_inc_0_1825 = 1000 * n_inc_clinical_0_1825_annual / PT_0_1825,
+            # yr_clinical_incidence_0_1825 = sum(clinical_incidence_0_1825)
+            ) %>%
+  ggplot(aes(x = year, y = yr_clin_inc_0_1825)) +
+    geom_line(col = "grey80") +
+    # geom_vline(xintercept = program_start / year, col = "red") +
+    stat_smooth(col = "darkblue", se = FALSE) +
+    facet_wrap(~ model, nrow = 3, ncol = 2) + 
+    xlab("year") +
+    ylab("Annual clinical incidence \n (per 1000 children aged 0-5)") +
+    theme_bw()
+
+# Cumulative raw cases in last 5 years of simulation by age group 
+# n_inc_clinical
+doses_n <- output %>%
+  # filter(timestep >= max(timestep)-5*year) %>%
+  select(c(starts_with('n_rtss'), model, timestep)) %>%
+  filter(if_any(c(-model, -timestep), ~ . !=0)) %>%
+  pivot_longer(cols = c( n_rtss_mass_dose_1:n_rtss_mass_booster_1),
+               names_to = 'age',
+               values_to = 'value') %>%
+  group_by(model) %>%
+  summarise(doses_tot = sum(value))
+
+d <- output %>%
+  filter(timestep >= max(timestep)-5*year) %>%
+  select(c(timestep, model,
+           starts_with('n_inc_cl'), -n_inc_clinical_0_1825, -n_inc_clinical_0_5475, -n_inc_clinical_150_510,
+           starts_with('n_inc_se'), -n_inc_severe_0_1825, -n_inc_severe_0_5475, -n_inc_severe_150_510)) %>%
+  left_join(doses_n, by = c('model')) %>%
+  pivot_longer(cols = c(n_inc_clinical_0_365:n_inc_clinical_7300_7665,
+                        n_inc_severe_0_365:n_inc_severe_7300_7665),
+               names_to = 'age',
+               values_to = 'value') %>%
+  mutate(inc_clinical = ifelse(grepl('n_inc_clinical', age), value, NA),
+         inc_severe = ifelse(grepl('n_inc_severe', age), value, NA),
+         age = gsub('n_inc_clinical_', '', age),
+         age = gsub('n_inc_severe_', '', age),
+         clin = ifelse(is.na(inc_clinical), 0,1)) %>% select(-value) %>%
+  group_by(age, model, clin) %>%
+  summarize(cum_clin_cases = sum(inc_clinical),
+            cum_sev_cases = sum(inc_severe),
+            cum_clin_cases_st = cum_clin_cases / doses_tot,
+            cum_sev_cases_st = cum_sev_cases / doses_tot,
+            model = model,
+            doses_tot = doses_tot
+            ) %>%
+  separate(col = age, into = c("age_lower", "age_upper"), sep="_", remove = F) %>%
+  mutate(age_lower = as.numeric(age_lower)/365,
+         age_upper = as.numeric(age_upper)/365,
+         age_grp = paste(age_lower, age_upper, sep = '-'),
+         age_grp = ordered(age_grp, levels = c('0-1','1-2','2-3','3-4','4-5','5-6','6-7','7-8','8-9','9-10','10-11','11-12','12-13','13-14','14-15','15-16','16-17','17-18','18-19','19-20','20-21'))) %>% distinct()
+
+cum_clin_cases <- ggplot(subset(d, d$clin == 1), aes(x = age_grp, y = cum_clin_cases)) +
+  geom_col(fill = 'lightblue', color = 'grey50', alpha = 0.7) + 
+  geom_text(aes(x = age_grp, y = cum_clin_cases,label = cum_clin_cases), vjust = -0.3, size = 3) +
+  facet_wrap(~model, nrow = 3) +
+  theme_minimal() +
+  labs(title = paste0('Cumulative clinical cases by age group in last 5 years of simulation - SV')) + 
+  theme(axis.text.x = element_text(angle = 90))
+
+cum_clin_cases_perdose <- ggplot(subset(d, d$clin == 1), aes(x = age_grp, y = cum_clin_cases_st)) +
+  geom_col(fill = 'lightblue', color = 'grey50', alpha = 0.7) + 
+  geom_text(aes(x = age_grp, y = cum_clin_cases_st,label = round(cum_clin_cases_st,1)), vjust = -0.3, size = 3) +
+  facet_wrap(~model, nrow = 3) +
+  theme_minimal() +
+  labs(title = paste0('Cumulative clinical cases by age group in last 5 years of simulation, per dose given - SV')) + 
+  theme(axis.text.x = element_text(angle = 90))
+
+cum_sev_cases <- ggplot(subset(d,d$clin==0), aes(x = age_grp, y = cum_sev_cases)) +
+  geom_col(fill = 'maroon', color = 'grey50', alpha = 0.7) + 
+  geom_text(aes(x = age_grp, y = cum_sev_cases,label = cum_sev_cases), vjust = -0.3, size = 3) +
+  facet_wrap(~model, nrow = 3) +
+  theme_minimal() +
+  labs(title = paste0('Cumulative severe cases by age group in last 5 years of simulation - SV')) + 
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r}
+clin_inc
+```
+
+```{r}
+dosesplot
+```
+
+```{r}
+cum_clin_cases
+```
+```{r}
+cum_clin_cases_perdose
+```
+
+```{r}
+cum_sev_cases
+```
+
+#### Plot of parasite prevalence
+```{r}
+# y= pfpr2-10, x = time
+# grouped by model (different age groups vaccinated)
+prev <- output %>%
+  filter(timestep < year*6) %>%
+  mutate(month = ceiling(timestep/month)) %>%
+  group_by(month, model) %>%
+  summarize(mo_n_detect_730_3650 = sum(n_detect_730_3650),
+            mo_n_730_3650 = sum(n_730_3650),
+            pfpr2_10 = mo_n_detect_730_3650 / mo_n_730_3650) 
+
+ggplot(prev, aes(y = pfpr2_10, x = month, group = model, color = model)) +
+  # geom_line() +
+  stat_smooth(aes(color = model), se = FALSE) +
+  scale_color_manual(values= unlist(col_SV_models)) +
+  xlab("month") +
+  ylab("PfPR2-10") +
+  theme_bw()
+```
+
+#### How to determine if elimination has been reached
+```{r}
+
+```
+
+## Using site files for BF and the Gambia
+#### Burkina Faso 
+```{r}
+## Burkina Faso
+BFA$sites
+bf_plateau_c <- site::single_site(foresite::BFA, 15)
+
+bf_params <- site::site_parameters(
+  interventions = bf_plateau_c$interventions,
+  demography = bf_plateau_c$demography,
+  vectors = bf_plateau_c$vectors,
+  seasonality = bf_plateau_c$seasonality,
+  overrides = list(human_population = human_population)#,
+  # burnin = warmup
+)
+
+## Adding the rtss vaccine
+peak <- peak_season_offset(bf_params)
+
+# One round of vaccination 
+timesteps <- round(peak - month * 3.5 + warmup)#seq(warmup, sim_length+warmup, by = year))
+boosters <- round(c(1*year))
+
+bf_params$rtss_doses <- round(c(0, 1 * month, 2 * month))
+  
+bf_params <- set_mass_rtss(
+  bf_params,
+  timesteps = timesteps, 
+  coverages = rep(0.85, length(timesteps)), 
+  min_wait = 1*month, 
+  min_age = 5*month,
+  max_age = 17*month, 
+  boosters = boosters, #timesteps following initial vaccination 
+  booster_coverage = rep(0.8, length(boosters)) # prop of vaccinated pop who will receive booster vaccine
+)
+  
+    # To increase booster titre up to the same as 3rd dose  (only for seasonal and hybrid)
+  bf_params$rtss_cs_boost <- c(6.37008, 0.35) 
+  
+  bf_params <- set_equilibrium(bf_params, bf_plateau_c$eir$eir[bf_plateau_c$eir$spp == 'pf'])
+
+## Run a simple simulation 
+output <- malariasimulation::run_simulation(
+  timesteps = bf_params$timesteps,
+  bf_params
+)
+
+output <- output %>%
+  filter(timestep > warmup) %>%
+  mutate(timestep = timestep - warmup) %>%
+  mutate(pfpr = n_detect_730_3649/n_730_3649,
+         t = timestep/365 + 2000)
+ggplot(output) +
+  geom_line(aes(x = t, y = pfpr))  +
+  theme_minimal()
+
+plot((output$timestep)/365+2000, output$pfpr, type = 'l')
+
+```
+
+#### The Gambia
+```{r}
+## The Gambia
+GMB$sites
+gamb_UR <- site::single_site(foresite::GMB, 7) 
+
+gmb_params <- site::site_parameters(
+  interventions = gamb_UR$interventions,
+  demography = gamb_UR$demography,
+  vectors = gamb_UR$vectors,
+  seasonality = gamb_UR$seasonality,
+  overrides = list(human_population = human_population),
+  burnin = warmup
+)
+
+## here, can set the other parameters 
+output <- malariasimulation::run_simulation(
+  timesteps = gmb_params$timesteps,
+  gmb_params
+)
+
+output <- output %>%
+  filter(timestep > warmup) %>%
+  mutate(timestep = timestep - warmup) %>%
+  mutate(pfpr = n_detect_730_3649/n_730_3649,
+         t = timestep/365 + 2000)
+ggplot(output) +
+  geom_line(aes(x = t, y = pfpr))  +
+  theme_minimal()
+plot((output$timestep)/365+2000, output$pfpr, type = 'l')
+```
+

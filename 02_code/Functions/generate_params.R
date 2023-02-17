@@ -29,6 +29,7 @@ generate_params <- function(inputpath,   # path to input scenarios
     SMC = data$SMC
     RTSS = data$RTSS
     RTSScov = data$RTSScov
+    RTSSage = data$RTSSage
     fifth = data$fifth
     ID = data$ID
     drawID = data$drawID
@@ -38,20 +39,22 @@ generate_params <- function(inputpath,   # path to input scenarios
     
     # starting parameters ----------
     params <- get_parameters(list(
-      human_population = population,
-      model_seasonality = TRUE,
-      # rainfall fourier parameters
-      g0 = unlist(seasonality)[1],
-      g = unlist(seasonality)[2:4],
-      h = unlist(seasonality)[5:7],
-      individual_mosquitoes = FALSE))
+    human_population = population,
+    model_seasonality = TRUE,
+    # rainfall fourier parameters
+    g0 = unlist(seasonality)[1],
+    g = unlist(seasonality)[2:4],
+    h = unlist(seasonality)[5:7],
+    individual_mosquitoes = FALSE))
     
     # outcome definitions ----------
-    # incidence for every 5 year age group
-    params$clinical_incidence_rendering_min_ages = c(0, 0.25, seq(5, 100, 5)) * year
-    params$clinical_incidence_rendering_max_ages = c(0.25, seq(5, 100, 5), 200) * year
-    params$severe_incidence_rendering_min_ages = c(0, 0.25, seq(5, 100, 5)) * year
-    params$severe_incidence_rendering_max_ages = c(0.25, seq(5, 100, 5), 200) * year
+    # Set clinical incidence rendering 
+    params$clinical_incidence_rendering_min_ages = c(0, round(5*month,1), 0, seq(0, year*20, by = 1*year))
+    params$clinical_incidence_rendering_max_ages = c(5 * year, round(17*month,1), 15*year,seq(year*1, year*21, by = 1*year))
+    
+    # Set severe incidence rendering 
+    params$severe_incidence_rendering_min_ages = c(0, round(5*month,1), 0, seq(0, year*20, by = 1*year))
+    params$severe_incidence_rendering_max_ages = c(5 * year, round(17*month,1), 15*year,seq(year*1, year*21, by = 1*year))
     
     # prevalence 2-10 year olds
     params$prevalence_rendering_min_ages = 2 * year
@@ -140,7 +143,7 @@ generate_params <- function(inputpath,   # path to input scenarios
       coverages = c(rep(ITNuse1, npre),      # set baseline coverage
                     rep(ITNuse2, npost)),    # set intervention coverage
       
-      retention = 3 * year,
+      retention = 5 * year,
       
       dn0 = matrix(c(rep(dn0_1, npre), rep(dn0_2, npost),
                      rep(dn0_1, npre), rep(dn0_2, npost),
@@ -288,6 +291,23 @@ generate_params <- function(inputpath,   # path to input scenarios
     # SV ----------
     rtss_mass_timesteps <- 0
     
+    if(RTSSage == 'young children'){
+      min_ages = round(5*month)
+      max_ages = round(17*month)
+    } else if (RTSSage == 'all children'){
+      min_ages = round(5*month)
+      max_ages = 15*year
+    } else if (RTSSage == 'under 5s'){
+      min_ages = round(5*month)
+      max_ages = 5*year
+    } else if (RTSSage == 'school-aged'){
+      min_ages = 5*year
+      max_ages = 15*year
+    } else if (RTSSage == 'everyone'){
+      min_ages = round(5*month)
+      max_ages = 100*year
+    }
+    
     if (RTSS == "SV") {
       peak <- peak_season_offset(params)
       first <- round(warmup + (peak - month * 3.5), 0)
@@ -300,8 +320,8 @@ generate_params <- function(inputpath,   # path to input scenarios
         parameters = params,
         timesteps = timesteps,
         coverages = rep(RTSScov,length(timesteps)),
-        min_ages = round(5 * month),
-        max_ages = round(17 * month),
+        min_ages = min_ages,#round(5 * month),
+        max_ages = max_ages,#round(17 * month),
         min_wait = 0,
         boosters = boosters,
         booster_coverage = rep(.80, length(boosters)))
@@ -417,16 +437,20 @@ generate_params <- function(inputpath,   # path to input scenarios
     }
     
     # save as data.frame
-    parameters <- data.frame(params = c(0), scenarioID = c(0), drawID = c(0), ID = c(0))
-    parameters$params <- list(params)
-    parameters$scenarioID <- x
-    parameters$drawID <- data$drawID
-    parameters$ID <- data$ID
+    data$params <- list(params)
+    data$scenarioID <- x
+    
+    # # save as data.frame
+    # parameters <- data.frame(params = c(0), scenarioID = c(0), drawID = c(0), ID = c(0))
+    # parameters$params <- list(params)
+    # parameters$scenarioID <- x
+    # parameters$drawID <- data$drawID
+    # parameters$ID <- data$ID
     
     # print count
-    print(x)
+    print(paste(x,'pfpr=',data$pfpr))
     
-    return(parameters)
+    return(data)
     
   }
   
@@ -436,5 +460,5 @@ generate_params <- function(inputpath,   # path to input scenarios
   
   # save output ----------
   saveRDS(output, outputpath)
-  
+
 }

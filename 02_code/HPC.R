@@ -1,6 +1,43 @@
+# Run scenarios in malariasimulation on HPC
+### This script first sets up the HPC. 
+### Next, creates a set of scenarios that we want to test and then uses the `generate_params` 
+### function to create a list of parameters for each scenario and outputs this as a file. 
+### The function `run_simulation` is run for each scenario in this parameter list.
+
+## Setting up cluster ------------------------------------------------------------------------------------------------
 source('02_code/data_libraries.R')
 
-# MODEL set-up ----
+setwd(HPCpath)
+
+options(didehpc.cluster = "fi--didemrchnb",
+        didehpc.username = "kem22")
+didehpc::web_login()
+
+# to edit HPC username and password below
+# usethis::edit_r_environ
+
+src <- conan::conan_sources(c("github::mrc-ide/malariasimulation"))
+
+ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
+                             sources = c(paste0(HPCpath, 'Functions/run_simulation.R')),
+                             packages = c("dplyr", "malariasimulation"),
+                             package_sources = src)
+
+share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")
+config <- didehpc::didehpc_config(credentials = list(
+  username = Sys.getenv("DIDE_USERNAME"),
+  password = Sys.getenv("DIDE_PASSWORD")),
+  shares = share,
+  use_rrq = FALSE,
+  cores = 1,
+  cluster = "fi--didemrchnb",
+  template = "32Core", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
+  parallel = FALSE)
+
+obj <- didehpc::queue_didehpc(ctx, config = config)
+
+
+## Model set up ------------------------------------------------------------------------------------------------
 # year
 year <- 365
 
@@ -64,17 +101,16 @@ treatment <- c(0.45)
 SMC <- c(0) 
 
 # RTS,S: none, EPI, SV, hybrid
-RTSS <- c('none') 
+RTSS <- c('none','SV') 
+
+# RTS,S coverage
+RTSScov <- c(0, 0.8) 
 
 # RTS,S age group
 RTSSage <- c('all children','everyone','school-aged','under 5s','young children')
 
-# RTS,S coverage
-RTSScov <- c(0) 
-
 # adding a fifth RTS,S dose: 0, 1
-fifth <- c(0)  
-
+fifth <- c(0, 1)  
 
 interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, fifth)
 
@@ -83,10 +119,11 @@ combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, int
   mutate(ID = paste(pfpr, seas_name, ITNuse, drawID, sep = "_")) 
 
 # remove non-applicable scenarios -- we are not assuming SMC or RTSS so not applicable
-# combo <- combo |>
-#   filter(!(seas_name == 'highly seasonal' & SMC == 0)) |>
-#   filter(!(seas_name %in% c('perennial') & SMC != 0)) |>
-#   filter(!(RTSS == 'none' & RTSScov == 0.9))
+combo <- combo |>
+  filter(!(seas_name == 'highly seasonal' & SMC == 0)) |>
+  filter(!(seas_name %in% c('perennial') & SMC != 0)) |>
+  filter(!(RTSS == 'none' & RTSScov > 0)) |>
+  filter(!(RTSS == 'SV' & RTSScov == 0))
 
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -112,66 +149,43 @@ combo <- combo |>
          drawID             # parameter draw no.
   ) |> as.data.frame()
 
-saveRDS(combo, paste0(path, '03_output/baseline_scenarios.rds'))
+saveRDS(combo, paste0(path, '03_output/scenarios_torun.rds'))
 
 # generate parameter list in malariasimulation format
 source(paste0(path, '02_code/Functions/generate_params.R'))
 
-generate_params(paste0(path, '03_output/baseline_scenarios.rds'), # file path to pull
-                paste0(path, "03_output/baseline_parameters.rds"))      # file path to push
+generate_params(paste0(path, '03_output/scenarios_torun.rds'), # file path to pull
+                paste0(path, "03_output/parameters_torun.rds"))      # file path to push
 
-### Do PfPR/EIR matching 
-pr_match <- function(x){
+# Run tasks -------------------------------------------------------------------------------------------------------------
+x = c(1:nrow(combo)) # runs
+
+# define all combinations of scenarios and draws
+index <- tibble(x = x)
+
+# remove ones that have already been run
+index <- index |> 
+  mutate(f = paste0(HPCpath, "HPC/general_", index$x, ".rds")) |>
+  mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) |>
+  filter(exist == 0) |>
+  select(-f, -exist)
+
+# run a test with the first scenario
+# t <- obj$enqueue_bulk(index[1,], runsim)
+
+# submit jobs, 10 as a time
+sjob <- function(x, y){
   
-  data <- readRDS(paste0(path, "03_output/baseline_parameters.rds"))[x,]
-  params <- unlist(data$params, recursive = FALSE)
-  params$timesteps <- data$sim_length + data$warmup
+  t <- obj$enqueue_bulk(index[x:y,], run_simulation)
+  return(1)
   
-  target <- data$pfpr
-  
-  set.seed(1234)
-  out <- calibrate(parameters = params,
-                   target = target,
-                   summary_function = summary_mean_pfpr_2_10,
-                   tolerance = 0.02,
-                   low = 0.1,
-                   high = 150)
-  
-  # store init_EIR results as an .rds file to be read in later
-  PR <- data.frame(scenarioID = x, drawID = 0)
-  PR$starting_EIR <- out
-  PR$ID <- data$ID
-  
-  print(paste0('Finished scenario ',x))
-  saveRDS(PR, paste0('03_output/PrEIR/PRmatch_draws_', data$ID, '.rds'))
 }
 
-lapply(1:nrow(combo), pr_match)
-
-# Results ----------------------------------------------------------------------
-# read in results
-files <- list.files(path = paste0("03_output/PrEIR"), pattern = "PRmatch_draws_", full.names = TRUE)
-dat_list <- lapply(files, function (x) readRDS(x))
-
-# concatenate
-match <-  do.call("rbind", dat_list) |> as_tibble()
-
-summary(match$starting_EIR)
-
-# take a look at failed jobs
-anti_join(combo, match, by = "ID") 
+map2_dfr(seq(0, nrow(index) - 10, 10),
+         seq(9, nrow(index), 10),
+         sjob)
 
 
-# if needed, use the code to set these IDs to a starting EIR of XX (the upper limit in the PRmatch.R function)
-# remainder <- anti_join(combo |> mutate(scenarioID = row_number()), match, by = "ID") |> 
-#   mutate(starting_EIR = 1000) |>
-#   select(scenarioID, drawID, starting_EIR, ID)
-# 
-# match <- full_join(match, remainder)
-
-
-# save EIR estimates, both on local machine and on shared drive
-saveRDS(match, paste0(path, "03_output/PrEIR/EIRestimates.rds"))
-saveRDS(match, paste0(HPCpath, "EIRestimates.rds"))
-
-
+# submit all remaining tasks
+# t <- obj$enqueue_bulk(index, runsim)
+# t$status()
