@@ -5,11 +5,11 @@ runsim <- function(x){ # x = scenario #
   month <- year / 12
   
   # read in selected scenario
-  data <- readRDS("./run_parameters.rds")[x,]
-  match <- readRDS("./EIRestimates.rds") |> select(-scenarioID)
-  
+  data <- readRDS("03_output/parameters_torun.rds")[x,]
+  match <- readRDS("03_output/EIRestimates.rds") |> select(-scenarioID)
+  # match <- readRDS("03_output/PrEIR/test_PRmatch_draws_0.4_perennial_0_0.rds") |> select(-scenarioID)
   # EIR / prev match from "PfPR_EIR_match.R"
-  data <- data |> left_join(match, by = c("drawID", "ID"))
+  data <- data |> left_join(match, by = c("drawID", "ID")) #%>% filter(scenarioID==351)
   
   # EIR equilibrium ----------
   params <- set_equilibrium(unlist(data$params, recursive = F), as.numeric(data$starting_EIR))
@@ -45,8 +45,8 @@ runsim <- function(x){ # x = scenario #
            RTSScov = data$RTSScov,
            RTSSage = data$RTSSage,
            fifth = data$fifth) |>
-    ungroup() |>
-    filter(timestep > 0) |> # remove warmup period
+    ungroup() #|>
+    # filter(timestep > 0) |> # remove warmup period
     
     # statistics by month
     mutate(year = ceiling(timestep/year),
@@ -79,6 +79,7 @@ runsim <- function(x){ # x = scenario #
   
   
   # save output ----------
-  saveRDS(output, paste0("./HPC/general_", x, ".rds"))
+  saveRDS(output, paste0(path, "./03_output/general_",x,".rds"))
+  saveRDS(output, paste0(HPCpath, "HPC/general_", x, ".rds"))
   
 }

@@ -4,38 +4,7 @@
 ### function to create a list of parameters for each scenario and outputs this as a file. 
 ### The function `run_simulation` is run for each scenario in this parameter list.
 
-## Setting up cluster ------------------------------------------------------------------------------------------------
-source('02_code/data_libraries.R')
-
-setwd(HPCpath)
-
-options(didehpc.cluster = "fi--didemrchnb",
-        didehpc.username = "kem22")
-didehpc::web_login()
-
-# to edit HPC username and password below
-# usethis::edit_r_environ
-
-src <- conan::conan_sources(c("github::mrc-ide/malariasimulation"))
-
-ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
-                             sources = c(paste0(HPCpath, 'Functions/run_simulation.R')),
-                             packages = c("dplyr", "malariasimulation"),
-                             package_sources = src)
-
-share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")
-config <- didehpc::didehpc_config(credentials = list(
-  username = Sys.getenv("DIDE_USERNAME"),
-  password = Sys.getenv("DIDE_PASSWORD")),
-  shares = share,
-  use_rrq = FALSE,
-  cores = 1,
-  cluster = "fi--didemrchnb",
-  template = "32Core", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
-  parallel = FALSE)
-
-obj <- didehpc::queue_didehpc(ctx, config = config)
-
+source('02_code/packages_data.R')
 
 ## Model set up ------------------------------------------------------------------------------------------------
 # year
@@ -45,8 +14,8 @@ year <- 365
 population <- 10000
 
 # run time
-warmup <- 3 * year       # needs to be multiple of 3 for ITN distribution
-sim_length <- 6 * year   # value > 0 
+warmup <- 15 * year       # needs to be multiple of 3 for ITN distribution
+sim_length <- 12 * year   # value > 0 
 
 # number of parameter draws
 # 0 = use mean values, 1 to 50 = draws
@@ -109,10 +78,13 @@ RTSScov <- c(0, 0.8)
 # RTS,S age group
 RTSSage <- c('all children','everyone','school-aged','under 5s','young children')
 
+# Rounds of RTSS mass vaccination
+RTSSrounds <- c('single', 'every 3 years')
+
 # adding a fifth RTS,S dose: 0, 1
 fifth <- c(0, 1)  
 
-interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, fifth)
+interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth)
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
@@ -123,7 +95,9 @@ combo <- combo |>
   filter(!(seas_name == 'highly seasonal' & SMC == 0)) |>
   filter(!(seas_name %in% c('perennial') & SMC != 0)) |>
   filter(!(RTSS == 'none' & RTSScov > 0)) |>
-  filter(!(RTSS == 'SV' & RTSScov == 0))
+  filter(!(RTSS == 'SV' & RTSScov == 0)) |>
+  filter(!(RTSSrounds == 'single' & RTSS == 'none')) |>
+  filter(!(RTSSrounds == 'every 3 years' & RTSS == 'none')) 
 
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -144,6 +118,7 @@ combo <- combo |>
          RTSS,              # RTS,S strategy
          RTSScov,           # RTS,S coverage
          RTSSage,           # RTS,S age groups
+         RTSSrounds,        # RTS,S rounds of mass vax
          fifth,             # status of 5th dose for SV or hybrid strategies
          ID,                # name of output file
          drawID             # parameter draw no.
@@ -155,7 +130,39 @@ saveRDS(combo, paste0(path, '03_output/scenarios_torun.rds'))
 source(paste0(path, '02_code/Functions/generate_params.R'))
 
 generate_params(paste0(path, '03_output/scenarios_torun.rds'), # file path to pull
-                paste0(path, "03_output/parameters_torun.rds"))      # file path to push
+                paste0(HPCpath, "03_output/parameters_torun.rds"))      # file path to push
+
+## Setting up cluster ------------------------------------------------------------------------------------------------
+setwd(HPCpath)
+
+didehpc::web_login()
+
+# to edit HPC username and password below
+# usethis::edit_r_environ()
+share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")
+config <- didehpc::didehpc_config(credentials = list(
+  username = Sys.getenv("DIDE_USERNAME"),
+  password = Sys.getenv("DIDE_PASSWORD")),
+  workdir = HPCpath,
+  shares = share,
+  use_rrq = FALSE,
+  cores = 1,
+  cluster = "fi--didemrchnb",
+  template = "32Core", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
+  parallel = FALSE) 
+
+src <- conan::conan_sources(c("github::mrc-ide/malariasimulation"))
+
+ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
+                             sources = c(paste0(HPCpath, 'Functions/run_simulation.R')),
+                             packages = c("dplyr", "malariasimulation"),
+                             package_sources = src)
+
+
+
+obj <- didehpc::queue_didehpc(ctx, config = config)
+
+
 
 # Run tasks -------------------------------------------------------------------------------------------------------------
 x = c(1:nrow(combo)) # runs
@@ -171,12 +178,14 @@ index <- index |>
   select(-f, -exist)
 
 # run a test with the first scenario
-# t <- obj$enqueue_bulk(index[1,], runsim)
+t <- obj$enqueue_bulk(index[1,], runsim)
+t$status()
+t$results()
 
 # submit jobs, 10 as a time
 sjob <- function(x, y){
   
-  t <- obj$enqueue_bulk(index[x:y,], run_simulation)
+  t <- obj$enqueue_bulk(index[x:y,], runsim)
   return(1)
   
 }

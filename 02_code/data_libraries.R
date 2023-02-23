@@ -5,7 +5,7 @@
 path <- "C:/Users/kem22/OneDrive - Imperial College London/PhD Admin/Mass vaccination/massvaccination/"
 
 # high performance computing cluster location
-# HPCpath <- "M:/Hillary/malariavax2G/"
+HPCpath <- "M:/Kelly/massvacc/"
 
 # Packages ----
 library(malariasimulation) # devtools::install_github('mrc-ide/malariasimulation', force=T)
@@ -44,16 +44,3 @@ library(ggplot2)
 # color palette
 # lacroix_palette(type = "paired")
 
-# assign scenarios to particular colors for plotting
-smc          <- "#FC6882"
-pbo          <- "#007BC3"
-itn          <- "#54BCD1"
-rtss_sv      <- "#009F3F"
-rtss_age     <- "#54E356"
-pbo_smc      <- "#C70E7B"
-itn_smc      <- "#B25D91"
-rtss_smc     <- "#EFC7E6"
-pbo_rtss_smc <- "#AF6125"
-itn_rtss_smc <- "#F5DD42"
-pbo_rtss     <- "#EF7C12"
-itn_rtss     <- "#F4B95A"

@@ -1,15 +1,15 @@
-source('02_code/data_libraries.R')
+source('02_code/packages_data.R')
 
 # MODEL set-up ----
 # year
 year <- 365
 
 # population
-population <- 10000
+population <- 50000
 
 # run time
-warmup <- 3 * year       # needs to be multiple of 3 for ITN distribution
-sim_length <- 6 * year   # value > 0 
+warmup <- 12 * year       # needs to be multiple of 3 for ITN distribution
+sim_length <- 12 * year   # value > 0 
 
 # number of parameter draws
 # 0 = use mean values, 1 to 50 = draws
@@ -17,7 +17,7 @@ drawID <- c(0)
 
 # SITE set-up ----
 # parasite prevalence 2-10 year olds
-pfpr <- c(0.03, seq(.05, .65, .05)) # start at 10% (min rec for RTSS use)
+pfpr <- c(0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.35, 0.45, 0.55, 0.65) # same profiles as Penny et al. 
 
 # seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
 # drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
@@ -67,7 +67,7 @@ SMC <- c(0)
 RTSS <- c('none') 
 
 # RTS,S age group
-RTSSage <- c('all children','everyone','school-aged','under 5s','young children')
+RTSSage <- c(0)#c('all children','everyone','school-aged','under 5s','young children')
 
 # RTS,S coverage
 RTSScov <- c(0) 
@@ -80,7 +80,7 @@ interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
-  mutate(ID = paste(pfpr, seas_name, ITNuse, drawID, sep = "_")) 
+  mutate(ID = paste(pfpr, seas_name, ITNuse, RTSSage, drawID, sep = "_")) 
 
 # remove non-applicable scenarios -- we are not assuming SMC or RTSS so not applicable
 # combo <- combo |>
@@ -114,37 +114,14 @@ combo <- combo |>
 
 saveRDS(combo, paste0(path, '03_output/baseline_scenarios.rds'))
 
-# generate parameter list in malariasimulation format
+# generate parameter list in malariasimulation format -----
 source(paste0(path, '02_code/Functions/generate_params.R'))
 
 generate_params(paste0(path, '03_output/baseline_scenarios.rds'), # file path to pull
                 paste0(path, "03_output/baseline_parameters.rds"))      # file path to push
 
-### Do PfPR/EIR matching 
-pr_match <- function(x){
-  
-  data <- readRDS(paste0(path, "03_output/baseline_parameters.rds"))[x,]
-  params <- unlist(data$params, recursive = FALSE)
-  params$timesteps <- data$sim_length + data$warmup
-  
-  target <- data$pfpr
-  
-  set.seed(1234)
-  out <- calibrate(parameters = params,
-                   target = target,
-                   summary_function = summary_mean_pfpr_2_10,
-                   tolerance = 0.02,
-                   low = 0.1,
-                   high = 150)
-  
-  # store init_EIR results as an .rds file to be read in later
-  PR <- data.frame(scenarioID = x, drawID = 0)
-  PR$starting_EIR <- out
-  PR$ID <- data$ID
-  
-  print(paste0('Finished scenario ',x))
-  saveRDS(PR, paste0('03_output/PrEIR/PRmatch_draws_', data$ID, '.rds'))
-}
+### Do PfPR/EIR matching -----
+source('02_code/Functions/eir_prev_matching.R')
 
 lapply(1:nrow(combo), pr_match)
 
@@ -172,6 +149,6 @@ anti_join(combo, match, by = "ID")
 
 # save EIR estimates, both on local machine and on shared drive
 saveRDS(match, paste0(path, "03_output/PrEIR/EIRestimates.rds"))
-saveRDS(match, paste0(HPCpath, "EIRestimates.rds"))
+saveRDS(match, paste0(HPCpath, "03_output/EIRestimates.rds"))
 
 

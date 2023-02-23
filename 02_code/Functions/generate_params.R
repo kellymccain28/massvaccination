@@ -2,7 +2,7 @@
 
 generate_params <- function(inputpath,   # path to input scenarios
                             outputpath){ # path where output file will be stored
-  
+  #setwd(path)
   # read in dataframe of all scenario combinations
   scenarios <- readRDS(inputpath)
   
@@ -30,6 +30,7 @@ generate_params <- function(inputpath,   # path to input scenarios
     RTSS = data$RTSS
     RTSScov = data$RTSScov
     RTSSage = data$RTSSage
+    RTSSrounds = data$RTSSrounds
     fifth = data$fifth
     ID = data$ID
     drawID = data$drawID
@@ -291,7 +292,7 @@ generate_params <- function(inputpath,   # path to input scenarios
     # SV ----------
     rtss_mass_timesteps <- 0
     
-    if(RTSSage == 'young children'){
+    if (RTSSage == 'young children'){
       min_ages = round(5*month)
       max_ages = round(17*month)
     } else if (RTSSage == 'all children'){
@@ -309,9 +310,19 @@ generate_params <- function(inputpath,   # path to input scenarios
     }
     
     if (RTSS == "SV") {
-      peak <- peak_season_offset(params)
-      first <- round(warmup + (peak - month * 3.5), 0)
-      timesteps <- c(first, first+seq(year, sim_length, year))
+      # peak <- peak_season_offset(params)
+      # first <- round(warmup + (peak - month * 3.5), 0)
+      # timesteps <- c(first)#c(first, first+seq(year, sim_length, year))
+      if (RTSSrounds == 'single'){
+        peak <- peak_season_offset(params)
+        first <- round(warmup + (peak - month * 3.5), 0)
+        timesteps <- c(first)
+      } else if (RTSSrounds == 'every 3 years'){
+        peak <- peak_season_offset(params)
+        first <- round(warmup + (peak - month * 3.5), 0)
+        timesteps <- c(first, first + seq(3*year, sim_length, 3*year))
+      } 
+      
       params$rtss_doses <- round(c(0, 1 * month, 2 * month))
       
       boosters <- if(fifth == 0) round(c(12 * month + 2 * month)) else round(c(12 * month + 2 * month, 24 * month + 2 * month))
@@ -328,7 +339,6 @@ generate_params <- function(inputpath,   # path to input scenarios
       
       # var for outputting to check RTS,S timings are correct
       rtss_mass_timesteps <- params$rtss_mass_timesteps - warmup
-      
     }
     
     # hybrid ----------
