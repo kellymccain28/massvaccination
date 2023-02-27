@@ -6,10 +6,11 @@ runsim <- function(x){ # x = scenario #
   
   # read in selected scenario
   data <- readRDS("03_output/parameters_torun.rds")[x,]
+  # match <- readRDS('03_output/PrEIR/test_PRmatch_draws_0.55_perennial_0_0.rds') |>select(-scenarioID)|>mutate(ID = '0.55_perennial_0_0')
   match <- readRDS("03_output/EIRestimates.rds") |> select(-scenarioID)
-  # match <- readRDS("03_output/PrEIR/test_PRmatch_draws_0.4_perennial_0_0.rds") |> select(-scenarioID)
+ 
   # EIR / prev match from "PfPR_EIR_match.R"
-  data <- data |> left_join(match, by = c("drawID", "ID")) #%>% filter(scenarioID==351)
+  data <- data |> left_join(match, by = c("drawID", "ID"))# %>% filter(scenarioID==463)
   
   # EIR equilibrium ----------
   params <- set_equilibrium(unlist(data$params, recursive = F), as.numeric(data$starting_EIR))

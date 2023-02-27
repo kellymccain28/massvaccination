@@ -5,7 +5,7 @@ source('02_code/packages_data.R')
 year <- 365
 
 # population
-population <- 50000
+population <- 10000
 
 # run time
 warmup <- 12 * year       # needs to be multiple of 3 for ITN distribution
@@ -75,12 +75,11 @@ RTSScov <- c(0)
 # adding a fifth RTS,S dose: 0, 1
 fifth <- c(0)  
 
-
 interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, fifth)
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
-  mutate(ID = paste(pfpr, seas_name, ITNuse, RTSSage, drawID, sep = "_")) 
+  mutate(ID = paste(pfpr, seas_name, ITNuse, drawID, sep = "_")) #, RTSSage
 
 # remove non-applicable scenarios -- we are not assuming SMC or RTSS so not applicable
 # combo <- combo |>
@@ -118,12 +117,71 @@ saveRDS(combo, paste0(path, '03_output/baseline_scenarios.rds'))
 source(paste0(path, '02_code/Functions/generate_params.R'))
 
 generate_params(paste0(path, '03_output/baseline_scenarios.rds'), # file path to pull
-                paste0(path, "03_output/baseline_parameters.rds"))      # file path to push
+                paste0(HPCpath, "03_output/baseline_parameters.rds"))      # file path to push
 
-### Do PfPR/EIR matching -----
-source('02_code/Functions/eir_prev_matching.R')
+## Setting up cluster ------------------------------------------------------------------------------------------------
+setwd(HPCpath)
 
-lapply(1:nrow(combo), pr_match)
+didehpc::web_login()
+
+# to edit HPC username and password below
+# usethis::edit_r_environ()
+share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")
+
+config <- didehpc::didehpc_config(credentials = list(
+  username = Sys.getenv("DIDE_USERNAME"),
+  password = Sys.getenv("DIDE_PASSWORD")),
+  workdir = HPCpath,
+  shares = share,
+  use_rrq = FALSE,
+  cores = 1,
+  cluster = "fi--didemrchnb",
+  template = "32Core", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
+  parallel = FALSE)
+
+src <- conan::conan_sources(c("github::mrc-ide/malariasimulation", "github::mrc-ide/cali"))
+
+
+ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
+                             sources = c(paste0(HPCpath, '02_code/Functions/eir_prev_matching.R')),
+                             packages = c("dplyr", "malariasimulation","cali"),
+                             package_sources = src)
+
+obj <- didehpc::queue_didehpc(ctx, config = config)
+
+
+# Run tasks -------------------------------------------------------------------------------------------------------------
+x <- c(1:nrow(combo)) # baseline scenarios
+
+# define all combinations of scenarios and draws
+# index <- tibble(x = x, y = combo$drawID, ID = combo$ID)
+index <- tibble(x=x, ID = combo$ID)
+# remove ones that have already been run
+index <- index |>
+  mutate(f = paste0(HPCpath, "PR_EIR/PRmatch_draws_", index$ID, ".rds")) |>
+  mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) |>
+  filter(exist == 0) |>
+  select(-f, -exist, -ID)
+
+# run a test with the first scenario
+# t <- obj$enqueue_bulk(index[1,], pr_match)
+# t$wait(1000)
+
+# submit jobs, 100 as a time
+sjob <- function(x, y){
+  t <- obj$enqueue_bulk(index[1:30,], pr_match)
+  print(paste0(x, ' to ', y))
+}
+
+map2_dfr(0,#seq(0, nrow(index) - 10, 10),
+         30,#seq(9, nrow(index), 10),
+         sjob)
+
+
+### Do PfPR/EIR matching wihtout cluster -----
+# source('02_code/Functions/eir_prev_matching.R')
+# 
+# lapply(1:nrow(combo), pr_match)
 
 # Results ----------------------------------------------------------------------
 # read in results

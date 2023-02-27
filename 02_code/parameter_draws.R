@@ -1,7 +1,7 @@
 # Set up draws of malariasimulation parameters, pulled from MalariaLaunchR
 # 50 draws are used for uncertainty runs
 
-source("./02_code/data_libraries.R")
+source("./02_code/packages_data.R")
 
 
 # get draws --------------------------------------------------------------------
@@ -12,8 +12,7 @@ dat_list <- lapply(files, function (x) read.delim(x, header = F, col.names = c('
 
 dat <- rbindlist(dat_list, fill = TRUE, idcol = "file")
 
-d <- dat |> group_by(file) |> 
-  pivot_wider(names_from = 'var', values_from = 'value')
+d <- dat |> group_by(file) |> pivot_wider(names_from = 'var', values_from = 'value')
 head(d); str(d)
 
 # save to local machine and HPC access drive

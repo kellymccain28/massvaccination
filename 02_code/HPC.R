@@ -11,7 +11,7 @@ source('02_code/packages_data.R')
 year <- 365
 
 # population
-population <- 10000
+population <- 50000
 
 # run time
 warmup <- 15 * year       # needs to be multiple of 3 for ITN distribution
@@ -76,10 +76,10 @@ RTSS <- c('none','SV')
 RTSScov <- c(0, 0.8) 
 
 # RTS,S age group
-RTSSage <- c('all children','everyone','school-aged','under 5s','young children')
+RTSSage <- c('none','all children','everyone','school-aged','under 5s','young children')
 
 # Rounds of RTSS mass vaccination
-RTSSrounds <- c('single', 'every 3 years')
+RTSSrounds <- c('none','single', 'every 3 years')
 
 # adding a fifth RTS,S dose: 0, 1
 fifth <- c(0, 1)  
@@ -88,16 +88,17 @@ interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
-  mutate(ID = paste(pfpr, seas_name, ITNuse, drawID, sep = "_")) 
+  mutate(ID = paste(pfpr, seas_name, ITNuse, drawID, sep = "_")) #, RTSSage
 
 # remove non-applicable scenarios -- we are not assuming SMC or RTSS so not applicable
 combo <- combo |>
-  filter(!(seas_name == 'highly seasonal' & SMC == 0)) |>
-  filter(!(seas_name %in% c('perennial') & SMC != 0)) |>
-  filter(!(RTSS == 'none' & RTSScov > 0)) |>
+  filter(!(RTSS=='none' & RTSScov > 0)) |>
   filter(!(RTSS == 'SV' & RTSScov == 0)) |>
-  filter(!(RTSSrounds == 'single' & RTSS == 'none')) |>
-  filter(!(RTSSrounds == 'every 3 years' & RTSS == 'none')) 
+  filter(!(RTSScov == 0 & RTSSage %in% c('all children','everyone','school-aged','under 5s','young children'))) |>
+  filter(!(RTSScov > 0 & RTSSage == 'none')) |>
+  filter(!(RTSSage %in% c('all children','everyone','school-aged','under 5s','young children') & RTSSrounds == 'none')) |>
+  filter(!(RTSSage == 'none' & RTSSrounds %in% c('single','every 3 years'))) |>
+  filter(!(RTSSrounds =='none' & fifth == 1))
 
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -154,7 +155,7 @@ config <- didehpc::didehpc_config(credentials = list(
 src <- conan::conan_sources(c("github::mrc-ide/malariasimulation"))
 
 ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
-                             sources = c(paste0(HPCpath, 'Functions/run_simulation.R')),
+                             sources = c(paste0(HPCpath, '02_code/Functions/run_simulation.R')),
                              packages = c("dplyr", "malariasimulation"),
                              package_sources = src)
 

@@ -40,13 +40,13 @@ generate_params <- function(inputpath,   # path to input scenarios
     
     # starting parameters ----------
     params <- get_parameters(list(
-    human_population = population,
-    model_seasonality = TRUE,
-    # rainfall fourier parameters
-    g0 = unlist(seasonality)[1],
-    g = unlist(seasonality)[2:4],
-    h = unlist(seasonality)[5:7],
-    individual_mosquitoes = FALSE))
+        human_population = population,
+        model_seasonality = TRUE,
+        # rainfall fourier parameters
+        g0 = unlist(seasonality)[1],
+        g = unlist(seasonality)[2:4],
+        h = unlist(seasonality)[5:7],
+        individual_mosquitoes = FALSE))
     
     # outcome definitions ----------
     # Set clinical incidence rendering 
@@ -271,6 +271,7 @@ generate_params <- function(inputpath,   # path to input scenarios
     }
     
     # EPI ----------
+    if (RTSScov > 0) {
     if (RTSS == "EPI") {
       params$rtss_doses <- round(c(0, 1.5 * month, 3 * month))
       boosters <- round(c(18 * month))
@@ -278,10 +279,8 @@ generate_params <- function(inputpath,   # path to input scenarios
 
       params <- set_rtss_epi(
         parameters = params,
-        timesteps = timesteps,# this is written by kelly -n ot sure if correct
-        # start = warmup,
-        # end = warmup + sim_length,
-        coverages = rep(RTSScov, length(timesteps)),# this is written by kelly -n ot sure if correct
+        timesteps = timesteps,
+        coverages = rep(RTSScov, length(timesteps)),
         age = round(6 * month),
         min_wait = 0,
         boosters = boosters,
@@ -310,9 +309,6 @@ generate_params <- function(inputpath,   # path to input scenarios
     }
     
     if (RTSS == "SV") {
-      # peak <- peak_season_offset(params)
-      # first <- round(warmup + (peak - month * 3.5), 0)
-      # timesteps <- c(first)#c(first, first+seq(year, sim_length, year))
       if (RTSSrounds == 'single'){
         peak <- peak_season_offset(params)
         first <- round(warmup + (peak - month * 3.5), 0)
@@ -331,8 +327,8 @@ generate_params <- function(inputpath,   # path to input scenarios
         parameters = params,
         timesteps = timesteps,
         coverages = rep(RTSScov,length(timesteps)),
-        min_ages = min_ages,#round(5 * month),
-        max_ages = max_ages,#round(17 * month),
+        min_ages = min_ages,
+        max_ages = max_ages,
         min_wait = 0,
         boosters = boosters,
         booster_coverage = rep(.80, length(boosters)))
@@ -362,6 +358,7 @@ generate_params <- function(inputpath,   # path to input scenarios
         booster_coverage = rep(.80, 1),
         seasonal_boosters = FALSE
       ) }
+    }
     
     # synergy SMC & RTS,S ----------
     if (SMC > 0 & RTSS %in% c("EPI", "SV", "hybrid")) {
@@ -449,13 +446,6 @@ generate_params <- function(inputpath,   # path to input scenarios
     # save as data.frame
     data$params <- list(params)
     data$scenarioID <- x
-    
-    # # save as data.frame
-    # parameters <- data.frame(params = c(0), scenarioID = c(0), drawID = c(0), ID = c(0))
-    # parameters$params <- list(params)
-    # parameters$scenarioID <- x
-    # parameters$drawID <- data$drawID
-    # parameters$ID <- data$ID
     
     # print count
     print(paste(x,'pfpr=',data$pfpr))
