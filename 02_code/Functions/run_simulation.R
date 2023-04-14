@@ -6,13 +6,13 @@ runsim <- function(x){ # x = scenario #
   
   # read in selected scenario
   data <- readRDS("03_output/parameters_torun.rds")[x,]
-  # match <- readRDS('03_output/PrEIR/test_PRmatch_draws_0.55_perennial_0_0.rds') |>select(-scenarioID)|>mutate(ID = '0.55_perennial_0_0')
-  match <- readRDS("03_output/EIRestimates.rds") |> select(-scenarioID)
+  # read in collated EIR estimates 
+  match <- readRDS("03_output/PrEIR/EIRestimates.rds") |> select(-scenarioID)
  
   # EIR / prev match from "PfPR_EIR_match.R"
-  data <- data |> left_join(match, by = c("drawID", "ID"))# %>% filter(scenarioID==463)
+  data <- data |> left_join(match, by = c("drawID", "ID"))
   
-  # EIR equilibrium ----------
+  # Set EIR equilibrium ----------
   params <- set_equilibrium(unlist(data$params, recursive = F), as.numeric(data$starting_EIR))
   
   # run simulation ----------
@@ -32,7 +32,7 @@ runsim <- function(x){ # x = scenario #
            sim_length = data$sim_length,
            population = data$population,
            pfpr = data$pfpr,
-           timestep = timestep - data$warmup,
+           # timestep = timestep - data$warmup,
            seasonality = data$seas_name,
            speciesprop = paste(data$speciesprop, sep = ",", collapse = ""),
            ITN = data$ITN,
@@ -45,8 +45,9 @@ runsim <- function(x){ # x = scenario #
            RTSS = data$RTSS,
            RTSScov = data$RTSScov,
            RTSSage = data$RTSSage,
+           RTSSrounds = data$RTSSrounds,
            fifth = data$fifth) |>
-    ungroup() #|>
+    ungroup() |>
     # filter(timestep > 0) |> # remove warmup period
     
     # statistics by month
@@ -55,7 +56,7 @@ runsim <- function(x){ # x = scenario #
     
     # keep only necessary variables
     dplyr::select(ID, scenario, drawID, EIR, warmup, sim_length, population, pfpr, month, year, seasonality, speciesprop,
-                  ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, fifth,
+                  ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, timestep,
                   starts_with("n_inc_severe"), starts_with("p_inc_severe"),
                   starts_with("n_rtss"),
                   starts_with("n_inc"), starts_with("p_inc"),
@@ -64,14 +65,14 @@ runsim <- function(x){ # x = scenario #
     
     # take means of populations and sums of cases by month
     group_by(ID, scenario, drawID, EIR, warmup, sim_length, population, pfpr, month, year, seasonality, speciesprop,
-             ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, fifth) |>
+             ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth) |>
     
     mutate_at(vars(n_0_1825:n_7300_7665, n_730_3650,
                    n_detect_730_3650, p_detect_730_3650), mean, na.rm = TRUE) |>
     mutate_at(vars(n_inc_severe_0_1825:p_inc_clinical_7300_7665,
                    n_treated, n_infections), sum, na.rm = TRUE) |>
     
-    dplyr::select(n_0_1825:n_7300_7665,
+    dplyr::select(timestep, n_0_1825:n_7300_7665,
                   n_inc_severe_0_1825:p_inc_clinical_7300_7665,
                   n_detect_730_3650, p_detect_730_3650,
                   n_730_3650,
@@ -80,7 +81,7 @@ runsim <- function(x){ # x = scenario #
   
   
   # save output ----------
-  saveRDS(output, paste0(path, "./03_output/general_",x,".rds"))
-  saveRDS(output, paste0(HPCpath, "HPC/general_", x, ".rds"))
+  # saveRDS(output, paste0(path, "./03_output/raw_modelrun_",x,".rds"))
+  saveRDS(output, paste0(HPCpath, "HPC/raw_modelrun_", x, ".rds"))
   
 }

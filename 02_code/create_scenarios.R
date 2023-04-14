@@ -13,7 +13,7 @@ sim_length <- 12 * year   # value > 0
 
 # number of parameter draws
 # 0 = use mean values, 1 to 50 = draws
-drawID <- c(0)
+drawID <- c(0, 1:50)
 
 # SITE set-up ----
 # parasite prevalence 2-10 year olds
@@ -122,7 +122,7 @@ generate_params(paste0(path, '03_output/baseline_scenarios.rds'), # file path to
 ## Setting up cluster ------------------------------------------------------------------------------------------------
 setwd(HPCpath)
 
-didehpc::web_login()
+# didehpc::web_login()
 
 # to edit HPC username and password below
 # usethis::edit_r_environ()
@@ -135,7 +135,7 @@ config <- didehpc::didehpc_config(credentials = list(
   shares = share,
   use_rrq = FALSE,
   cores = 1,
-  cluster = "fi--didemrchnb",
+  cluster = "fi--dideclusthn",#"fi--didemrchnb",
   template = "32Core", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
   parallel = FALSE)
 
@@ -154,31 +154,30 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 x <- c(1:nrow(combo)) # baseline scenarios
 
 # define all combinations of scenarios and draws
-# index <- tibble(x = x, y = combo$drawID, ID = combo$ID)
-index <- tibble(x=x, ID = combo$ID)
+index <- tibble(x=x, y = combo$drawID, ID = combo$ID)
+
 # remove ones that have already been run
 index <- index |>
-  mutate(f = paste0(HPCpath, "PR_EIR/PRmatch_draws_", index$ID, ".rds")) |>
+  mutate(f = paste0(HPCpath, "03_output/PrEIR/PRmatch_draws_", index$ID, ".rds")) |>
   mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) |>
   filter(exist == 0) |>
   select(-f, -exist, -ID)
 
 # run a test with the first scenario
-# t <- obj$enqueue_bulk(index[1,], pr_match)
+# t <- obj$enqueue_bulk(index[1530,], pr_match)
 # t$wait(1000)
 
-# submit jobs, 100 as a time
+# submit jobs, 30 as a time
 sjob <- function(x, y){
-  t <- obj$enqueue_bulk(index[1:30,], pr_match)
+  t <- obj$enqueue_bulk(index[x:y,], pr_match)
   print(paste0(x, ' to ', y))
 }
 
-map2_dfr(0,#seq(0, nrow(index) - 10, 10),
-         30,#seq(9, nrow(index), 10),
+map2_dfr(seq(1, nrow(index), 30),
+         seq(30, nrow(index), 30),
          sjob)
 
-
-### Do PfPR/EIR matching wihtout cluster -----
+### Do PfPR/EIR matching without cluster -----
 # source('02_code/Functions/eir_prev_matching.R')
 # 
 # lapply(1:nrow(combo), pr_match)
@@ -194,11 +193,11 @@ match <-  do.call("rbind", dat_list) |> as_tibble()
 summary(match$starting_EIR)
 
 # take a look at failed jobs
-anti_join(combo, match, by = "ID") 
+failed <- anti_join(combo, match, by = "ID") 
 
 
 # if needed, use the code to set these IDs to a starting EIR of XX (the upper limit in the PRmatch.R function)
-# remainder <- anti_join(combo |> mutate(scenarioID = row_number()), match, by = "ID") |> 
+# remainder <- anti_join(combo |> mutate(scenarioID = row_number()), match, by = "ID") |>
 #   mutate(starting_EIR = 1000) |>
 #   select(scenarioID, drawID, starting_EIR, ID)
 # 
@@ -207,6 +206,6 @@ anti_join(combo, match, by = "ID")
 
 # save EIR estimates, both on local machine and on shared drive
 saveRDS(match, paste0(path, "03_output/PrEIR/EIRestimates.rds"))
-saveRDS(match, paste0(HPCpath, "03_output/EIRestimates.rds"))
+saveRDS(match, paste0(HPCpath, "03_output/PrEIR/EIRestimates.rds"))
 
 

@@ -15,15 +15,15 @@ population <- 50000
 
 # run time
 warmup <- 15 * year       # needs to be multiple of 3 for ITN distribution
-sim_length <- 12 * year   # value > 0 
+sim_length <- 21 * year   # value > 0 
 
 # number of parameter draws
 # 0 = use mean values, 1 to 50 = draws
-drawID <- c(0)
+drawID <- c(0, 1:50)
 
 # SITE set-up ----
 # parasite prevalence 2-10 year olds
-pfpr <- c(0.03, seq(.05, .65, .05)) # start at 10% (min rec for RTSS use)
+pfpr <- c(0.03, 0.05, 0.25, 0.45, 0.65)#c(0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.35, 0.45, 0.55, 0.65) # 
 
 # seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
 # drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
@@ -40,7 +40,7 @@ seas_name <- 'perennial'
 seasonality <- list(c(0.2852770,-0.0248801,-0.0529426,-0.0168910,-0.0216681,-0.0242904,-0.0073646))
 s3 <- tibble(seasonality, seas_name)
 
-stable <- bind_rows(s1, s2, s3)
+stable <- bind_rows( s2, s3)#s1,
 
 # vectors
 # list(arab_params, fun_params, gamb_params)
@@ -69,36 +69,40 @@ treatment <- c(0.45)
 # SMC: 0, 1
 SMC <- c(0) 
 
-# RTS,S: none, EPI, SV, hybrid
-RTSS <- c('none','SV') 
+# RTS,S: none, EPI, SVmass+EPI, SVmass+hybrid, mass+EPI, hybrid, catch-up
+RTSS <- c('none', 'SVmass+EPI', 'SVmass+hybrid', 'EPI', 'hybrid', 'mass+EPI') #,'catch-up'
 
 # RTS,S coverage
 RTSScov <- c(0, 0.8) 
 
 # RTS,S age group
-RTSSage <- c('none','all children','everyone','school-aged','under 5s','young children')
+RTSSage <- c('none', 'school-aged', 'young children','everyone')#,'all children','under 5s'
 
 # Rounds of RTSS mass vaccination
-RTSSrounds <- c('none','single', 'every 3 years')
+RTSSrounds <- c('none','single','every 3 years')
 
 # adding a fifth RTS,S dose: 0, 1
-fifth <- c(0, 1)  
+fifth <- c(0)
 
 interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth)
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
-  mutate(ID = paste(pfpr, seas_name, ITNuse, drawID, sep = "_")) #, RTSSage
+  mutate(ID = paste(pfpr, seas_name, ITNuse, drawID, sep = "_")) 
 
-# remove non-applicable scenarios -- we are not assuming SMC or RTSS so not applicable
+# remove non-applicable scenarios 
 combo <- combo |>
   filter(!(RTSS=='none' & RTSScov > 0)) |>
-  filter(!(RTSS == 'SV' & RTSScov == 0)) |>
-  filter(!(RTSScov == 0 & RTSSage %in% c('all children','everyone','school-aged','under 5s','young children'))) |>
+  filter(!(RTSS %in% c('SVmass+EPI','SVmass+hybrid','mass+EPI','EPI','hybrid','catch-up') & RTSScov == 0)) |>
+  filter(!(RTSScov == 0 & RTSSage %in% c('all children','everyone','school-aged','under 5s','young children','over 5s'))) |>
   filter(!(RTSScov > 0 & RTSSage == 'none')) |>
-  filter(!(RTSSage %in% c('all children','everyone','school-aged','under 5s','young children') & RTSSrounds == 'none')) |>
+  filter(!(RTSS %in% c('EPI','hybrid') & RTSSage %in% c('all children', 'everyone','school-aged','under 5s','over 5s','none'))) |> # age and hybrid only given to young children 
+  filter(!(RTSS %in% c('EPI','hybrid') & RTSSrounds %in% c('single','every 3 years'))) |> # they don't get mass vaccination rounds
   filter(!(RTSSage == 'none' & RTSSrounds %in% c('single','every 3 years'))) |>
-  filter(!(RTSSrounds =='none' & fifth == 1))
+  filter(!((RTSS =='none' | RTSS == 'EPI') & fifth == 1)) |>
+  filter(!(seas_name == "perennial" & (RTSS == "SVmass+EPI" |RTSS =='SVmass+hybrid' | RTSS == "hybrid"))) |>
+  filter(!((RTSS == 'SVmass+EPI' |RTSS =='SVmass+hybrid'| RTSS =='mass+EPI') & RTSSrounds == 'none')) |>
+  filter(!((RTSS == 'SVmass+EPI'|RTSS =='SVmass+hybrid'|RTSS == 'mass+EPI') & RTSSage %in% c('young children'))) # when routine vaccination is to children 5-17 months, wouldn't do mass to them too
 
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -120,10 +124,17 @@ combo <- combo |>
          RTSScov,           # RTS,S coverage
          RTSSage,           # RTS,S age groups
          RTSSrounds,        # RTS,S rounds of mass vax
-         fifth,             # status of 5th dose for SV or hybrid strategies
+         fifth,             # status of 5th dose for mass or hybrid strategies
          ID,                # name of output file
          drawID             # parameter draw no.
   ) |> as.data.frame()
+
+# rearrange so new ones are at the end 
+new <- combo |>
+  filter(RTSSrounds=='every 3 years' | RTSS == 'mass+EPI' | pfpr == 0.03)
+combo <- combo |>
+  filter(!(RTSSrounds=='every 3 years' | RTSS == 'mass+EPI' | pfpr == 0.03)) |>
+  rbind(new)
 
 saveRDS(combo, paste0(path, '03_output/scenarios_torun.rds'))
 
@@ -136,11 +147,12 @@ generate_params(paste0(path, '03_output/scenarios_torun.rds'), # file path to pu
 ## Setting up cluster ------------------------------------------------------------------------------------------------
 setwd(HPCpath)
 
-didehpc::web_login()
+# didehpc::web_login()
 
 # to edit HPC username and password below
 # usethis::edit_r_environ()
-share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")
+share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")#'kem22','Q:','//qdrive.dide.ic.ac.uk/homes','Q:')
+
 config <- didehpc::didehpc_config(credentials = list(
   username = Sys.getenv("DIDE_USERNAME"),
   password = Sys.getenv("DIDE_PASSWORD")),
@@ -148,8 +160,8 @@ config <- didehpc::didehpc_config(credentials = list(
   shares = share,
   use_rrq = FALSE,
   cores = 1,
-  cluster = "fi--didemrchnb",
-  template = "32Core", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
+  cluster = "fi--dideclusthn", #"fi--didemrchnb",
+  template = '8Core',#"32Core","GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
   parallel = FALSE) 
 
 src <- conan::conan_sources(c("github::mrc-ide/malariasimulation"))
@@ -159,29 +171,25 @@ ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
                              packages = c("dplyr", "malariasimulation"),
                              package_sources = src)
 
-
-
 obj <- didehpc::queue_didehpc(ctx, config = config)
-
-
 
 # Run tasks -------------------------------------------------------------------------------------------------------------
 x = c(1:nrow(combo)) # runs
 
 # define all combinations of scenarios and draws
 index <- tibble(x = x)
-
+# index <- index[1837:5355,]
 # remove ones that have already been run
-index <- index |> 
-  mutate(f = paste0(HPCpath, "HPC/general_", index$x, ".rds")) |>
+index <- index |>
+  mutate(f = paste0(HPCpath, "HPC/raw_modelrun_", index$x, ".rds")) |>
   mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) |>
   filter(exist == 0) |>
   select(-f, -exist)
 
 # run a test with the first scenario
-t <- obj$enqueue_bulk(index[1,], runsim)
-t$status()
-t$results()
+# t <- obj$enqueue_bulk(3424, runsim) #936-svmass+hybrid #545
+# t$status()
+#t$results()
 
 # submit jobs, 10 as a time
 sjob <- function(x, y){
@@ -191,11 +199,11 @@ sjob <- function(x, y){
   
 }
 
-map2_dfr(seq(0, nrow(index) - 10, 10),
-         seq(9, nrow(index), 10),
+map2_dfr(seq(0, nrow(index)- 100, 100),
+         seq(99, nrow(index), 100),
          sjob)
 
 
 # submit all remaining tasks
-# t <- obj$enqueue_bulk(index, runsim)
+t <- obj$enqueue_bulk(index, runsim)
 # t$status()

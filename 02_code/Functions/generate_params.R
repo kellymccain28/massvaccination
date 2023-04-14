@@ -50,19 +50,19 @@ generate_params <- function(inputpath,   # path to input scenarios
     
     # outcome definitions ----------
     # Set clinical incidence rendering 
-    params$clinical_incidence_rendering_min_ages = c(0, round(5*month,1), 0, seq(0, year*20, by = 1*year))
-    params$clinical_incidence_rendering_max_ages = c(5 * year, round(17*month,1), 15*year,seq(year*1, year*21, by = 1*year))
+    params$clinical_incidence_rendering_min_ages = c(c(0, 0.25, seq(1, 20, by = 1))*year, seq(0, 95, by = 5)*year)
+    params$clinical_incidence_rendering_max_ages = c(c(0.25, seq(1, 21, by = 1))*year, seq(5, 100, by = 5)*year) 
     
     # Set severe incidence rendering 
-    params$severe_incidence_rendering_min_ages = c(0, round(5*month,1), 0, seq(0, year*20, by = 1*year))
-    params$severe_incidence_rendering_max_ages = c(5 * year, round(17*month,1), 15*year,seq(year*1, year*21, by = 1*year))
+    params$severe_incidence_rendering_min_ages = c(c(0, 0.25, seq(1, 20, by = 1))*year, seq(0, 95, by = 5)*year) 
+    params$severe_incidence_rendering_max_ages = c(c(0.25, seq(1, 21, by = 1))*year, seq(5, 100, by = 5)*year) 
     
     # prevalence 2-10 year olds
     params$prevalence_rendering_min_ages = 2 * year
     params$prevalence_rendering_max_ages = 10 * year
     
     # demography ----------
-    flat_demog <- read.table('./01_data/Flat_demog.txt') # from mlgts
+    flat_demog <- read.table(paste0(path,'/01_data/Flat_demog.txt')) # from mlgts
     ages <- round(flat_demog$V3 * year) # top of age bracket
     deathrates <- flat_demog$V5 / 365   # age-specific death rates
     
@@ -272,23 +272,26 @@ generate_params <- function(inputpath,   # path to input scenarios
     
     # EPI ----------
     if (RTSScov > 0) {
+      program_start <- 1 * year
+      
     if (RTSS == "EPI") {
-      params$rtss_doses <- round(c(0, 1.5 * month, 3 * month))
-      boosters <- round(c(18 * month))
-      timesteps <- c(0, 1.5*month, 3*month)# this is written by kelly -n ot sure if correct
+      params$rtss_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
+      boosters <- if(fifth == 0) round(c(12 * month)) else round(c(12 * month, 24 * month)) # from phase III R21 trial
+      boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
 
       params <- set_rtss_epi(
         parameters = params,
-        timesteps = timesteps,
-        coverages = rep(RTSScov, length(timesteps)),
-        age = round(6 * month),
+        timesteps = warmup + program_start, # starting when warmup ends
+        coverages = RTSScov,
+        age = round(5 * month),
         min_wait = 0,
         boosters = boosters,
-        booster_coverage = rep(.80, 1),
+        booster_coverage = boost_cov,
         seasonal_boosters = FALSE
-      )  }
+      )  
+      }
     
-    # SV ----------
+    # mass ----------
     rtss_mass_timesteps <- 0
     
     if (RTSSage == 'young children'){
@@ -304,64 +307,127 @@ generate_params <- function(inputpath,   # path to input scenarios
       min_ages = 5*year
       max_ages = 15*year
     } else if (RTSSage == 'everyone'){
-      min_ages = round(5*month)
+      min_ages = 5*year
       max_ages = 100*year
     }
     
-    if (RTSS == "SV") {
+    if (RTSS == "SVmass+EPI" | RTSS == 'SVmass+hybrid' | RTSS == 'mass+EPI') {
+      
+      params$rtss_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
+      peak <- peak_season_offset(params)
+      boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
+      
+      if(RTSS == 'SVmass+EPI' | RTSS == "mass+EPI"){
+        # First set the EPI strategy 
+        boosters <- if(fifth == 0) round(c(12 * month)) else round(c(12 * month, 24 * month)) # from phase III R21 trial
+      
+        params <- set_rtss_epi(
+          parameters = params,
+          timesteps = warmup + program_start, # starting when warmup ends
+          coverages = RTSScov,
+          age = round(5 * month),
+          min_wait = 0,
+          boosters = boosters,
+          booster_coverage = boost_cov,
+          seasonal_boosters = FALSE)
+      } else if (RTSS == 'SVmass+hybrid'){
+        # Set the hybrid strategy
+        boosters <- if(fifth == 0) round(c(peak - 0.5 * month), 0) else round(((peak - 0.5 * month) + c(0, year)), 0)
+        
+        params <- set_rtss_epi(
+          parameters = params,
+          timesteps = warmup + program_start, # starting when warmup ends 
+          coverages = RTSScov,
+          age = round(5 * month),
+          min_wait = 0,
+          boosters = boosters,
+          booster_coverage = boost_cov,
+          seasonal_boosters = TRUE) 
+      }
+      
+      
+      # Get timing for mass vaccination rounds
+      if(RTSS == 'SVmass+EPI' | RTSS == 'SVmass+hybrid'){
+        first <- round(warmup + program_start + (peak - month * 3.5), 0) # start a year later
+      } else if(RTSS == 'mass+EPI'){
+        first <- round(warmup + program_start)
+      }
+      
       if (RTSSrounds == 'single'){
-        peak <- peak_season_offset(params)
-        first <- round(warmup + (peak - month * 3.5), 0)
         timesteps <- c(first)
       } else if (RTSSrounds == 'every 3 years'){
-        peak <- peak_season_offset(params)
-        first <- round(warmup + (peak - month * 3.5), 0)
-        timesteps <- c(first, first + seq(3*year, sim_length, 3*year))
-      } 
+        timesteps <- c(first, first + seq(3 * year, sim_length, 3 * year))
+      }
       
-      params$rtss_doses <- round(c(0, 1 * month, 2 * month))
+      # Next, set the mass vaccination strategy in addition to routine vaccination
+      massboosters <- if(fifth == 0) round(c(12 * month + 2 * month)) else round(c(12 * month + 2 * month, 24 * month + 2 * month))
       
-      boosters <- if(fifth == 0) round(c(12 * month + 2 * month)) else round(c(12 * month + 2 * month, 24 * month + 2 * month))
+      if(RTSSage %in% c('young children', 'all children', 'under 5s')){
+        min_wait = 3 * year  # I have no idea what the min wait would actually be - if vaccinated around 6 m, then next would be around 3.5-4 yrs old.
+      } else {
+        min_wait= 1*month
+      }
       
+      if(RTSSage != 'everyone'){
       params <- set_mass_rtss(
         parameters = params,
         timesteps = timesteps,
-        coverages = rep(RTSScov,length(timesteps)),
+        coverages = rep(RTSScov, length(timesteps)),
         min_ages = min_ages,
         max_ages = max_ages,
-        min_wait = 0,
-        boosters = boosters,
-        booster_coverage = rep(.80, length(boosters)))
+        min_wait = min_wait,
+        boosters = massboosters,
+        booster_coverage = boost_cov)
+      } else if(RTSSage == 'everyone'){
+        proppop_notpregnant <- 1 - 0.078/2 # from DHS data - see Get_pregnancy_rate.R
+        
+        # add mass vaccination for taking into account pregnant women
+        params <- set_mass_rtss(
+          params,
+          timesteps = timesteps, 
+          coverages = rep(RTSScov * proppop_notpregnant, length(timesteps)), 
+          min_ages = min_ages,
+          max_ages = max_ages,
+          min_wait = min_wait,
+          boosters = boosters, #timesteps following initial vaccination 
+          booster_coverage = rep(0.8, length(boosters)) # prop of vaccinated pop who will receive booster vaccine
+        )
+      }
       
       # var for outputting to check RTS,S timings are correct
-      rtss_mass_timesteps <- params$rtss_mass_timesteps - warmup
+      print(rtss_mass_timesteps <- params$rtss_mass_timesteps - warmup)
+      # print(rtss_epi_timesteps <- params$rtss_epi_timesteps - warmup)
+      print(params$rtss_epi_boosters)
     }
     
     # hybrid ----------
     if (RTSS == "hybrid") {
-      params$rtss_doses <- round(c(0, 1.5 * month, 3 * month))
+      params$rtss_doses <- round(c(0, 1 * month, 2 * month)) # spacing from phase iii trial R21
       
       peak <- peak_season_offset(params)
-      first <- round(warmup+(peak - month * 3.5),0)
-      boosters <- if(fifth == 0) round(c(first + 3 * month), 0) else round(((first + 3 * month) + c(0, year)), 0)
-      timesteps <- c(0, 1.5*month, 3*month) # this is written by kelly -n ot sure if correct
+      first <- round(warmup + program_start + (peak - month * 3.5), 0)
+      boosters <- if(fifth == 0) round(c(first - warmup + 3 * month), 0) else round(((first - warmup + 3 * month) + c(0, year)), 0)
+      boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
       
       params <- set_rtss_epi(
         parameters = params,
-        timesteps = timesteps,# this is written by kelly -n ot sure if correct
-        # start = warmup,
-        # end = warmup + sim_length,
-        coverages = rep(RTSScov, length(timesteps)),# this is written by kelly -n ot sure if correct
-        age = round(6 * month),
+        timesteps = warmup + program_start, # starting when warmup ends 
+        coverages = RTSScov,
+        age = round(5 * month),
         min_wait = 0,
         boosters = boosters,
-        booster_coverage = rep(.80, 1),
-        seasonal_boosters = FALSE
-      ) }
+        booster_coverage = boost_cov,
+        seasonal_boosters = TRUE
+      ) 
+      }
+    
+    if (RTSS == 'catch-up'){
+      
+    }
     }
     
     # synergy SMC & RTS,S ----------
-    if (SMC > 0 & RTSS %in% c("EPI", "SV", "hybrid")) {
+    if (SMC > 0 & RTSS %in% c("EPI", "mass", "hybrid")) {
       
       params$rtss_beta <- 70.9
       params$rtss_alpha <- 0.868
@@ -374,7 +440,6 @@ generate_params <- function(inputpath,   # path to input scenarios
     }
     
     # correlate interventions  ----------
-    # correlations are not working correctly at the moment with set.seed()
     # correlations <- get_correlation_parameters(params)
     
     # if (RTSScov == 0.77 & pfpr == 0.40) {
@@ -389,7 +454,11 @@ generate_params <- function(inputpath,   # path to input scenarios
     # choose a parameter draw
     if(drawID > 0){
       
-      d <- readRDS('./parameter_draws.rds')[drawID,]
+      #with malariasimulation@dev 
+      # params <- params |> set_parameter_draw(sample(1:1000,1))
+        
+      
+      d <- readRDS(paste0(path,'03_output/parameter_draws.rds'))[drawID,]
       
       # over-write malariasimulation parameters to match the parameter draw
       params$dd = d$dur_D
