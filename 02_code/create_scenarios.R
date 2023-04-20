@@ -75,17 +75,11 @@ RTSScov <- c(0)
 # adding a fifth RTS,S dose: 0, 1
 fifth <- c(0)  
 
-interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, fifth)
+interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, MDAcov, MDAtiming)
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
   mutate(ID = paste(pfpr, seas_name, ITNuse, drawID, sep = "_")) #, RTSSage
-
-# remove non-applicable scenarios -- we are not assuming SMC or RTSS so not applicable
-# combo <- combo |>
-#   filter(!(seas_name == 'highly seasonal' & SMC == 0)) |>
-#   filter(!(seas_name %in% c('perennial') & SMC != 0)) |>
-#   filter(!(RTSS == 'none' & RTSScov == 0.9))
 
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -106,7 +100,10 @@ combo <- combo |>
          RTSS,              # RTS,S strategy
          RTSScov,           # RTS,S coverage
          RTSSage,           # RTS,S age groups
-         fifth,             # status of 5th dose for SV or hybrid strategies
+         RTSSrounds,        # RTS,S rounds of mass vax
+         fifth,             # status of 5th dose for mass or hybrid strategies
+         MDAcov,            # MDA coverage
+         MDAtiming,         # timing of MDA round
          ID,                # name of output file
          drawID             # parameter draw no.
   ) |> as.data.frame()

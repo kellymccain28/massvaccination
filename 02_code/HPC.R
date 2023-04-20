@@ -63,14 +63,20 @@ resistance <- c(0)
 # IRS coverage
 IRS <-  c(0)
 
-# treatment coverage
+# treatment coverage (baseline)
 treatment <- c(0.45) 
+
+# MDAcoverage
+MDAcov <- c(0, 0.8)
+
+# MDA timing
+MDAtiming <- c('none', 'during') #'prior', , 'after'
 
 # SMC: 0, 1
 SMC <- c(0) 
 
 # RTS,S: none, EPI, SVmass+EPI, SVmass+hybrid, mass+EPI, hybrid, catch-up
-RTSS <- c('none', 'SVmass+EPI', 'SVmass+hybrid', 'EPI', 'hybrid', 'mass+EPI') #,'catch-up'
+RTSS <- c('none', 'SVmass+EPI', 'SVmass+hybrid', 'EPI', 'hybrid', 'mass+EPI', 'SV') #,'catch-up'
 
 # RTS,S coverage
 RTSScov <- c(0, 0.8) 
@@ -84,7 +90,7 @@ RTSSrounds <- c('none','single','every 3 years')
 # adding a fifth RTS,S dose: 0, 1
 fifth <- c(0)
 
-interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth)
+interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, MDAcov, MDAtiming)
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
@@ -96,13 +102,16 @@ combo <- combo |>
   filter(!(RTSS %in% c('SVmass+EPI','SVmass+hybrid','mass+EPI','EPI','hybrid','catch-up') & RTSScov == 0)) |>
   filter(!(RTSScov == 0 & RTSSage %in% c('all children','everyone','school-aged','under 5s','young children','over 5s'))) |>
   filter(!(RTSScov > 0 & RTSSage == 'none')) |>
-  filter(!(RTSS %in% c('EPI','hybrid') & RTSSage %in% c('all children', 'everyone','school-aged','under 5s','over 5s','none'))) |> # age and hybrid only given to young children 
-  filter(!(RTSS %in% c('EPI','hybrid') & RTSSrounds %in% c('single','every 3 years'))) |> # they don't get mass vaccination rounds
+  filter(!(RTSS %in% c('EPI','hybrid', 'SV') & RTSSage %in% c('all children', 'everyone','school-aged','under 5s','over 5s','none'))) |> # age and hybrid and SV only given to young children 
+  filter(!(RTSS %in% c('EPI','hybrid', 'SV') & RTSSrounds %in% c('single','every 3 years'))) |> # they don't get mass vaccination rounds
   filter(!(RTSSage == 'none' & RTSSrounds %in% c('single','every 3 years'))) |>
   filter(!((RTSS =='none' | RTSS == 'EPI') & fifth == 1)) |>
-  filter(!(seas_name == "perennial" & (RTSS == "SVmass+EPI" |RTSS =='SVmass+hybrid' | RTSS == "hybrid"))) |>
+  filter(!(seas_name == "perennial" & (RTSS == "SVmass+EPI" |RTSS =='SVmass+hybrid' | RTSS == "hybrid" | RTSS == 'SV'))) |>
   filter(!((RTSS == 'SVmass+EPI' |RTSS =='SVmass+hybrid'| RTSS =='mass+EPI') & RTSSrounds == 'none')) |>
-  filter(!((RTSS == 'SVmass+EPI'|RTSS =='SVmass+hybrid'|RTSS == 'mass+EPI') & RTSSage %in% c('young children'))) # when routine vaccination is to children 5-17 months, wouldn't do mass to them too
+  filter(!((RTSS == 'SVmass+EPI'|RTSS =='SVmass+hybrid'|RTSS == 'mass+EPI') & RTSSage %in% c('young children'))) |> # when routine vaccination is to children 5-17 months, wouldn't do mass to them too
+  filter(!((MDAcov > 0 | MDAtiming == 'during') & RTSS == 'none')) |> # only testing MDA combined with RTSS or RTSS alone, not MDA on its own
+  filter(!(MDAcov > 0 & MDAtiming == 'none')) |> # can't have coverage of MDA and no timing of MDA
+  filter(!(MDAcov == 0 & MDAtiming == 'during')) # can't have coverage of MDA at 0% and MDA during vax
 
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -125,16 +134,18 @@ combo <- combo |>
          RTSSage,           # RTS,S age groups
          RTSSrounds,        # RTS,S rounds of mass vax
          fifth,             # status of 5th dose for mass or hybrid strategies
+         MDAcov,            # MDA coverage
+         MDAtiming,         # timing of MDA round
          ID,                # name of output file
          drawID             # parameter draw no.
   ) |> as.data.frame()
 
 # rearrange so new ones are at the end 
-new <- combo |>
-  filter(RTSSrounds=='every 3 years' | RTSS == 'mass+EPI' | pfpr == 0.03)
-combo <- combo |>
-  filter(!(RTSSrounds=='every 3 years' | RTSS == 'mass+EPI' | pfpr == 0.03)) |>
-  rbind(new)
+# new <- combo |>
+#   filter(RTSSrounds=='every 3 years' | RTSS == 'mass+EPI' | pfpr == 0.03)
+# combo <- combo |>
+#   filter(!(RTSSrounds=='every 3 years' | RTSS == 'mass+EPI' | pfpr == 0.03)) |>
+#   rbind(new)
 
 saveRDS(combo, paste0(path, '03_output/scenarios_torun.rds'))
 
@@ -164,7 +175,7 @@ config <- didehpc::didehpc_config(credentials = list(
   template = '8Core',#"32Core","GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
   parallel = FALSE) 
 
-src <- conan::conan_sources(c("github::mrc-ide/malariasimulation"))
+src <- conan::conan_sources(c("github::mrc-ide/malariasimulation@dev"))
 
 ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
                              sources = c(paste0(HPCpath, '02_code/Functions/run_simulation.R')),
@@ -172,6 +183,7 @@ ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
                              package_sources = src)
 
 obj <- didehpc::queue_didehpc(ctx, config = config)
+# obj$install_packages("github::mrc-ide/malariasimulation@dev")
 
 # Run tasks -------------------------------------------------------------------------------------------------------------
 x = c(1:nrow(combo)) # runs
@@ -187,8 +199,9 @@ index <- index |>
   select(-f, -exist)
 
 # run a test with the first scenario
-# t <- obj$enqueue_bulk(3424, runsim) #936-svmass+hybrid #545
-# t$status()
+t <- obj$enqueue_bulk(897, runsim) #936-svmass+hybrid #545
+t$status()
+# t$wait(1000)
 #t$results()
 
 # submit jobs, 10 as a time

@@ -5,27 +5,31 @@
 # i <- sample(1:1836, 20, replace = FALSE) # to randomly sample 20 indices from list of runs to plot doses
 # lapply(i, pltd)
 
-plot_doses <- function(){
-  out <- readRDS(paste0(HPCpath, 'HPC/raw_modelrun_', format(x, scientific = FALSE), '.rds'))
-  
-  doses <- out |> 
-    # mutate(#timestep = timestep#-warmup,
-    #   month = ceiling(timestep / 30)) |>
-    filter(timestep >0) %>%
-    select(month, starts_with('n_rtss')) |>
-    pivot_longer(starts_with('n_rtss'), names_to = "dose", values_to = "count") |>
-    group_by(month, dose) |>
-    summarize(count = sum(count))
 
+
+plot_doses <- function(df){
+#' input: dataset by month  (output from process_by_month)
+#' output: plot with doses and prevalence 
+  RTSS <- df$RTSS[1]
+  RTSSage <- df$RTSSage[1]
+  RTSSrounds <- df$RTSSrounds[1]
+  seasonality <- df$seasonality[1]
+  
   # plot doses
-  dosesplot <- ggplot(data = doses) + 
-    geom_col(aes(x = month/12, y = count, fill = dose)) +
-    xlab("month") +
-    ylab("doses") +
+  dosesplot <- ggplot(data = df) + 
+    geom_col(aes(x = month/12, y = dosecount_median, fill = dose)) +
+    geom_line(aes(x = month/12, y = pfpr *max(df$dosecount_median)), color= 'darkgreen', linewidth = 2) +
+    labs(x = "Year",
+         y = "Number of doses",
+         fill = 'Dose',
+         title = paste0(RTSS, " to ", RTSSage, ', ', RTSSrounds, '; ', seasonality )) +
+    scale_y_continuous(name = "Number of doses",
+                       sec.axis = sec_axis(trans = ~./max(df$dosecount_median),
+                                           name = 'Prevalence 2-10')) +
     theme_bw() 
   
   dosesplot
-  ggsave(paste0(path, '03_output/Figures/Doses/dosesplot',x,'.png'), width = 8, height = 4)
+  # ggsave(paste0(path, '03_output/Figures/Doses/dosesplot',x,'.png'), width = 8, height = 4)
 }
 
 
@@ -86,7 +90,7 @@ plot_out_averted <- function(outcome, prev, seas, rtss){
     } else if(outcome == 'severe_avertedper1000vax'){
       out_label <- 'Severe cases averted per \n1000 fully vaccinated people'
     } 
-    output$int_ID_lab <- paste0(output$RTSS, " to ", output$RTSSage, ', ', output$RTSSrounds)#str_sub(output$int_ID, 6, -3)
+    output$int_ID_lab <- paste0(output$RTSS, " to ", output$RTSSage, ', ', output$RTSSrounds, '; ', MDAtiming)#str_sub(output$int_ID, 6, -3)
   
     plt <- ggplot(output %>% filter(pfpr == prev) %>% filter(seasonality == seas) %>% filter(grepl(rtss, RTSS))) +
       geom_col(aes(x = age_grp, y = .data[[paste0(outcome, "_median")]], group = int_ID_lab, fill = int_ID_lab), 
@@ -103,3 +107,6 @@ plot_out_averted <- function(outcome, prev, seas, rtss){
     ggsave(paste0(path, '03_output/Figures/', i, prev, seas, rtss, '.png'), width = 15, height = 10, units = 'in')
     return(plt)
 }
+
+
+# Plot 

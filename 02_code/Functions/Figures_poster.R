@@ -29,6 +29,7 @@ plot_AVERT <- function(outcome, prev){
   output$int_ID_lab <- paste0(output$vaccination_label, " to ", output$RTSSage)
   output$int_ID_lab <- ifelse(output$int_ID_lab == 'EPI to young children', 'EPI',
                               ifelse(output$int_ID_lab == 'Hybrid to young children', 'Hybrid', output$int_ID_lab))
+  
   lab_col <- c("#450061", "#7C00AD", "#AD0911", "#E3595F","#48610A", "#BAFA19")#, "#7CAE00", "#1D471D")
   
   plt <- ggplot(output %>% filter(pfpr == prev &  seasonality == 'seasonal' & RTSS != 'mass+EPI') %>% filter(age_grp %in% c('0-5', '5-10', '10-15', '15-20', '20-25', '25-30'))) +
@@ -63,7 +64,7 @@ p3 <- plot_AVERT(outcome = 'deaths_avertedper1000vax', prev = 0.03)+
 
 # Plot of deaths averted per 1000 fully vaccinated people initial pfpr = 0.65
 p4 <- plot_AVERT(outcome = 'deaths_avertedper1000vax', prev = 0.65)+
-  theme(legend.position = c(0.7, 0.7))
+  theme(legend.position = c(0.55, 0.7))
 
 deathssavertedplot <- p3 | p4
 deathssavertedplot
