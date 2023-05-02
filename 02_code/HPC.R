@@ -11,7 +11,7 @@ source('02_code/packages_data.R')
 year <- 365
 
 # population
-population <- 100000 # updated from 50,000 
+population <- 100000 # increased from 50,000 
 
 # run time
 warmup <- 15 * year       # needs to be multiple of 3 for ITN distribution
@@ -87,8 +87,11 @@ RTSSage <- c('none', 'school-aged', 'young children','everyone')#,'all children'
 # Rounds of RTSS mass vaccination
 RTSSrounds <- c('none','single','every 3 years')
 
-# adding a fifth RTS,S dose: 0, 1
+# Status of fifth RTSS dose- for simplicity, can only be 0 
 fifth <- c(0)
+
+# adding vaccine boosters: 0 - no fifth dose, fifth (2 booster doses), annual (every year), 6mo (every 6 months), 2yrs (every 2 years)
+booster_rep <- c(0, 'annual')
 
 interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, MDAcov, MDAtiming)
 
@@ -112,7 +115,9 @@ combo <- combo |>
   filter(!((MDAcov > 0 | MDAtiming == 'during') & RTSS == 'none')) |> # only testing MDA combined with RTSS or RTSS alone, not MDA on its own
   filter(!(MDAcov > 0 & MDAtiming == 'none')) |> # can't have coverage of MDA and no timing of MDA
   filter(!(MDAcov == 0 & MDAtiming == 'during')) |> # can't have coverage of MDA at 0% and MDA during vax
-  filter(!(seas_name == 'seasonal' & RTSS == 'mass+EPI'))  # no non-seasonal mass vaccination in seasonal areas
+  filter(!(seas_name == 'seasonal' & RTSS == 'mass+EPI')) |> # no non-seasonal mass vaccination in seasonal areas
+  filter(!(booster_rep == 'annual' & RTSS %in% c('hybrid', 'EPI'))) # no annual boosters for EPi and hybrid vaccination
+  
 
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -214,8 +219,8 @@ sjob <- function(x, y){
   
 }
 
-map2_dfr(seq(2100, nrow(index)- 100, 100),
-         seq(2199, nrow(index), 100),
+map2_dfr(seq(0, nrow(index)- 100, 100),
+         seq(99, nrow(index), 100),
          sjob)
 
 # submit all remaining tasks

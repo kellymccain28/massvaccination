@@ -49,7 +49,7 @@ process_summ_runs <- function(x){
   end <- Sys.time()
   print(end-start)
 }
-# index <- which(combo$MDAcov>0)
+# index <- which(combo$MDAcov>0)# index <- which(combo$MDAcov>0)
 
 map_dfr(index, process_summ_runs)
 
@@ -356,11 +356,11 @@ severeavper1000 <- plot_total_averted(df, outcome = "severe_avertedper1000vax", 
 ## Run the summarize function to get annual prevalence
 scenarios <- readRDS(paste0(HPCpath,'03_output/parameters_torun.rds'))
 index <- c(1:nrow(scenarios)) # runs
-
+# index <- c(2636:nrow(scenarios))
 # source(paste0(HPCpath, '02_code/')
 
 # run a test with the first scenario
-t <- obj$enqueue_bulk(1:2, process_runs_byyr) #936-svmass+hybrid #545
+t <- obj$enqueue_bulk(3:5, process_runs_byyr) #936-svmass+hybrid #545
 t$status()
 #t$results()
 
@@ -374,7 +374,7 @@ map2_dfr(seq(0, length(index)- 100, 100),
          seq(99, length(index), 100),
          sjob)
 #Submit last jobs
-# index <- 5300:5355# 1800:1836
+index <- 5300:5355# 1800:1836
 obj$enqueue_bulk(index, process_runs_byyr)
 
 # map_dfr(index, process_runs_byyr)

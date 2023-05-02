@@ -321,13 +321,23 @@ generate_params <- function(inputpath,   # path to input scenarios
         
         params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
         peak <- peak_season_offset(params)
-        massboosters <- if(fifth == 0) round(c(12 * month + 2 * month)) else round(c(12 * month + 2 * month, 24 * month + 2 * month))
-        boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
+        massboosters <- if(booster_rep == 0){ # only fourth dose
+          round(c(1 * year + 2 * month)) 
+          } else if (booster_rep == 'fifth'){ # fifth dose
+            round(c(1 * year + 2 * month, 2 * year + 2 * month))
+          } else if (booster_rep == 'annual'){ # annual doses 
+            round(c(1 * year + 2 * month, seq(2 * year + 2 * month, (sim_length / year) * year + 2 * month, by = year)))
+          } else if (booster_rep == '2yr'){ # doses every 2 years
+            round(c(1 * year + 2 * month, seq(2 * year + 2 * month, (sim_length / year) * year + 2 * month, by = 2 * year)))
+          }
+        boost_cov <- c(RTSScov * 0.8, rep(RTSScov*0.8*0.9, length(massboosters)-1)) # coverage from 10.1016/S2214-109X(22)00416-8
+        # if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) 
         
         if(RTSS == 'SVmass+EPI' | RTSS == "mass+EPI"){
           # First set the EPI strategy 
           EPIboosters <- if(fifth == 0) round(c(12 * month)) else round(c(12 * month, 24 * month)) # from phase III R21 trial
           pevtimesteps <- warmup + program_start # starting when warmup ends
+          EPIboost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) 
           
           params <- set_pev_epi(
             parameters = params,
@@ -337,13 +347,14 @@ generate_params <- function(inputpath,   # path to input scenarios
             age = round(5 * month),
             min_wait = 0,
             booster_timestep = EPIboosters,
-            booster_coverage = boost_cov,
+            booster_coverage = EPIboost_cov,
             booster_profile = list(rtss_booster_profile),
             seasonal_boosters = FALSE)
         } else if (RTSS == 'SVmass+hybrid'){
           # Set the hybrid strategy
           hybridboosters <- if(fifth == 0) round(c(peak - 0.5 * month), 0) else round(((peak - 0.5 * month) + c(0, year)), 0)
           pevtimesteps <- warmup + program_start # starting when warmup ends
+          hybridboos_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) 
           
           params <- set_pev_epi(
             parameters = params,
@@ -353,7 +364,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             age = round(5 * month),
             min_wait = 0,
             booster_timestep = hybridboosters,
-            booster_coverage = boost_cov,
+            booster_coverage = hybridboost_cov,
             booster_profile = list(rtss_booster_profile),
             seasonal_boosters = TRUE) 
         }
@@ -389,7 +400,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             max_ages = max_ages,
             min_wait = 0,#min_wait,
             booster_timestep = massboosters,
-            booster_coverage = rep(boost_cov, length(massboosters)),
+            booster_coverage = boost_cov,#rep(boost_cov, length(massboosters)),
             booster_profile = list(rtss_booster_profile))
         } else if(RTSSage == 'everyone'){
           proppop_notpregnant <- 1 - 0.078/2 # from DHS data - see Get_pregnancy_rate.R
@@ -405,7 +416,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             min_wait = 0,#min_wait,
             booster_timestep = massboosters, # timesteps following initial vaccination 
             booster_profile = list(rtss_booster_profile),
-            booster_coverage = rep(boost_cov, length(massboosters)) # prop of vaccinated pop who will receive booster vaccine
+            booster_coverage = boost_cov#rep(boost_cov, length(massboosters)) # prop of vaccinated pop who will receive booster vaccine
           )
         }
         
@@ -424,7 +435,7 @@ generate_params <- function(inputpath,   # path to input scenarios
         first <- round(warmup + program_start + (peak - month * 3.5), 0)
         boosters <- if(fifth == 0) round(c(first - warmup + 3 * month), 0) else round(((first - warmup + 3 * month) + c(0, year)), 0)
         boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
-        pevtimesteps <- warmup + program_start# starting when warmup ends
+        pevtimesteps <- warmup + program_start # starting when warmup ends
         
         params <- set_pev_epi(
           parameters = params,
