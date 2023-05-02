@@ -58,7 +58,7 @@ runsim <- function(x){ # x = scenario #
     dplyr::select(ID, scenario, drawID, EIR, warmup, sim_length, population, pfpr, month, year, seasonality, speciesprop,
                   ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, timestep,
                   starts_with("n_inc_severe"), starts_with("p_inc_severe"),
-                  starts_with("n_rtss"),
+                  starts_with("n_pev"),
                   starts_with("n_inc"), starts_with("p_inc"),
                   starts_with("n_detect"), starts_with("p_detect"),
                   starts_with("n_"), -n_bitten, n_treated, n_infections) |>

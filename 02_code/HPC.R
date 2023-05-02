@@ -11,7 +11,7 @@ source('02_code/packages_data.R')
 year <- 365
 
 # population
-population <- 50000
+population <- 100000 # updated from 50,000 
 
 # run time
 warmup <- 15 * year       # needs to be multiple of 3 for ITN distribution
@@ -23,7 +23,7 @@ drawID <- c(0, 1:50)
 
 # SITE set-up ----
 # parasite prevalence 2-10 year olds
-pfpr <- c(0.03, 0.05, 0.25, 0.45, 0.65)#c(0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.35, 0.45, 0.55, 0.65) # 
+pfpr <- c(0.01, 0.03, 0.05, 0.25, 0.45, 0.65)#c(0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.35, 0.45, 0.55, 0.65) # 
 
 # seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
 # drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
@@ -75,8 +75,8 @@ MDAtiming <- c('none', 'during') #'prior', , 'after'
 # SMC: 0, 1
 SMC <- c(0) 
 
-# RTS,S: none, EPI, SVmass+EPI, SVmass+hybrid, mass+EPI, hybrid, catch-up
-RTSS <- c('none', 'SVmass+EPI', 'SVmass+hybrid', 'EPI', 'hybrid', 'mass+EPI', 'SV') #,'catch-up'
+# RTS,S
+RTSS <- c('none', 'SVmass+EPI', 'SVmass+hybrid', 'EPI', 'hybrid', 'mass+EPI') #,'catch-up', 'SV'
 
 # RTS,S coverage
 RTSScov <- c(0, 0.8) 
@@ -111,7 +111,8 @@ combo <- combo |>
   filter(!((RTSS == 'SVmass+EPI'|RTSS =='SVmass+hybrid'|RTSS == 'mass+EPI') & RTSSage %in% c('young children'))) |> # when routine vaccination is to children 5-17 months, wouldn't do mass to them too
   filter(!((MDAcov > 0 | MDAtiming == 'during') & RTSS == 'none')) |> # only testing MDA combined with RTSS or RTSS alone, not MDA on its own
   filter(!(MDAcov > 0 & MDAtiming == 'none')) |> # can't have coverage of MDA and no timing of MDA
-  filter(!(MDAcov == 0 & MDAtiming == 'during')) # can't have coverage of MDA at 0% and MDA during vax
+  filter(!(MDAcov == 0 & MDAtiming == 'during')) |> # can't have coverage of MDA at 0% and MDA during vax
+  filter(!(seas_name == 'seasonal' & RTSS == 'mass+EPI'))  # no non-seasonal mass vaccination in seasonal areas
 
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -187,10 +188,11 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 
 # Run tasks -------------------------------------------------------------------------------------------------------------
 x = c(1:nrow(combo)) # runs
+# x <- which(combo$MDAcov>0 ) # to get only indices where there is MDA because we only need to rerun those
 
 # define all combinations of scenarios and draws
 index <- tibble(x = x)
-# index <- index[1837:5355,]
+
 # remove ones that have already been run
 index <- index |>
   mutate(f = paste0(HPCpath, "HPC/raw_modelrun_", index$x, ".rds")) |>
@@ -199,8 +201,8 @@ index <- index |>
   select(-f, -exist)
 
 # run a test with the first scenario
-t <- obj$enqueue_bulk(897, runsim) #936-svmass+hybrid #545
-t$status()
+t <- obj$enqueue_bulk(296, runsim) #936-svmass+hybrid #545
+# t$status()
 # t$wait(1000)
 #t$results()
 
@@ -212,10 +214,9 @@ sjob <- function(x, y){
   
 }
 
-map2_dfr(seq(0, nrow(index)- 100, 100),
-         seq(99, nrow(index), 100),
+map2_dfr(seq(2100, nrow(index)- 100, 100),
+         seq(2199, nrow(index), 100),
          sjob)
-
 
 # submit all remaining tasks
 t <- obj$enqueue_bulk(index, runsim)

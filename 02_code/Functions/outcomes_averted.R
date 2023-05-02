@@ -1,7 +1,7 @@
 # input: data frame that has been processed with HPC_summ and combined -- dalyoutput in Processing_model_runs.R
 # process: separates out the baseline scenarios and calculates clinical, severe cases, deaths, and DALYs averted
 # output: data frame with 1 row per age group per intervention scenario per drawID with new columns for outcomes averted
-# unique IDs: ID, age_grp
+# unique IDs: ID, int_ID, age_grp
 
 outcomes_averted <- function(df){
   
@@ -19,7 +19,6 @@ outcomes_averted <- function(df){
            u5_cases = ifelse(age %in% c('0-91.25','0-1', '91.25-1825'), cases, 0),
            u5_severe = ifelse(age %in% c('0-91.25','0-1', '91.25-1825'), sev_cases, 0),
            u5_dalys = ifelse(age %in% c('0-91.25', '0-1','91.25-1825'), daly, 0)) |>
-    # group_by(int_ID, age) |>
     mutate_at(vars(n, n_0_1825, n_91.25_1825,
                    u5_cases, u5_severe, u5_dalys,
                    inc_clinical, inc_severe,
@@ -27,11 +26,12 @@ outcomes_averted <- function(df){
                    cases, cases_lower, cases_upper, sev_cases,
                    deaths, deaths_lower, deaths_upper,
                    yll:daly_lower),
-              sum, na.rm = T) |>  # condense outputs over all ages in population
+              sum, na.rm = T) |>  
     select(-age, -age_upper, -age_lower) #, -int_ID, -group
 
   # separate out baseline scenarios
   none <- output |>
+    ungroup() |>
     filter(RTSS == 'none') |>
     rename(daly_baseline = daly,
            cases_baseline = cases,

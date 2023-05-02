@@ -276,6 +276,7 @@ generate_params <- function(inputpath,   # path to input scenarios
     # RTSS ----------
     if (RTSScov > 0) {
       program_start <- 1 * year
+      
       boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
       if (RTSSage == 'young children'){
         min_ages = round(5*month)
@@ -293,178 +294,178 @@ generate_params <- function(inputpath,   # path to input scenarios
         min_ages = 5*year
         max_ages = 100*year
       }
-      epipevtimesteps <- warmup + program_start# starting when warmup ends
-      
       
       # EPI 
-    if (RTSS == "EPI") {
-      params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
-      epiboosters <- if(fifth == 0) round(c(12 * month)) else round(c(12 * month, 24 * month)) # from phase III R21 trial
-      
-      params <- set_pev_epi(
-        parameters = params,
-        profile = rtss_profile,
-        timesteps = epipevtimesteps, 
-        coverages = RTSScov,
-        age = round(5 * month),
-        min_wait = 0,
-        booster_timestep = epiboosters,
-        booster_coverage = boost_cov,
-        booster_profile = list(rtss_booster_profile),
-        seasonal_boosters = FALSE
-      )  
-      }
-    
-    # mass ----------
-    # rtss_mass_timesteps <- 0
-    
-    if (RTSS == "SVmass+EPI" | RTSS == 'SVmass+hybrid' | RTSS == 'mass+EPI') {
-      
-      params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
-      peak <- peak_season_offset(params)
-      massboosters <- if(fifth == 0) round(c(12 * month + 2 * month)) else round(c(12 * month + 2 * month, 24 * month + 2 * month))
-      boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
-      
-      if(RTSS == 'SVmass+EPI' | RTSS == "mass+EPI"){
-        # First set the EPI strategy 
-        EPIboosters <- if(fifth == 0) round(c(12 * month)) else round(c(12 * month, 24 * month)) # from phase III R21 trial
-      
-        params <- set_pev_epi(
-          parameters = params,
-          profile = rtss_profile,
-          timesteps = epipevtimesteps,
-          coverages = RTSScov,
-          age = round(5 * month),
-          min_wait = 0,
-          booster_timestep = EPIboosters,
-          booster_coverage = boost_cov,
-          booster_profile = list(rtss_booster_profile),
-          seasonal_boosters = FALSE)
-      } else if (RTSS == 'SVmass+hybrid'){
-        # Set the hybrid strategy
-        hybridboosters <- if(fifth == 0) round(c(peak - 0.5 * month), 0) else round(((peak - 0.5 * month) + c(0, year)), 0)
+      if (RTSS == "EPI") {
+        params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
+        epiboosters <- if(fifth == 0) round(c(12 * month)) else round(c(12 * month, 24 * month)) # from phase III R21 trial
+        pevtimesteps <- warmup + program_start # starting when warmup ends
         
         params <- set_pev_epi(
           parameters = params,
           profile = rtss_profile,
-          timesteps = epipevtimesteps,
+          timesteps = pevtimesteps, 
           coverages = RTSScov,
           age = round(5 * month),
           min_wait = 0,
-          booster_timestep = hybridboosters,
+          booster_timestep = epiboosters,
           booster_coverage = boost_cov,
           booster_profile = list(rtss_booster_profile),
-          seasonal_boosters = TRUE) 
+          seasonal_boosters = FALSE
+        )  
       }
+    
+      # mass ----------
       
-      
-      # Get timing for mass vaccination rounds
-      if(RTSS == 'SVmass+EPI' | RTSS == 'SVmass+hybrid'){
-        first <- round(warmup + program_start + (peak - month * 3.5), 0) # start a year later
-      } else if(RTSS == 'mass+EPI'){
-        first <- round(warmup + program_start)
-      }
-      
-      if (RTSSrounds == 'single'){
-        masspevtimesteps <- c(first)
-      } else if (RTSSrounds == 'every 3 years'){
-        masspevtimesteps <- c(first, first + seq(3 * year, sim_length, 3 * year))
-      }
-      
-      # Next, set the mass vaccination strategy in addition to routine vaccination
-      # if(RTSSage %in% c('young children', 'all children', 'under 5s')){
-      #   min_wait = 3 * year  # I have no idea what the min wait would actually be - if vaccinated around 6 m, then next would be around 3.5-4 yrs old.
-      # } else {
-      #   min_wait = 1 * month
-      # }
-      
-      if(RTSSage != 'everyone'){
-      params <- set_mass_pev(
-        parameters = params,
-        profile = rtss_profile,
-        timesteps = masspevtimesteps,
-        coverages = rep(RTSScov, length(pevtimesteps)),
-        min_ages = min_ages,
-        max_ages = max_ages,
-        min_wait = 0,#min_wait,
-        booster_timestep = massboosters,
-        booster_coverage = rep(boost_cov, length(massboosters)),
-        booster_profile = list(rtss_booster_profile))
-      } else if(RTSSage == 'everyone'){
-        proppop_notpregnant <- 1 - 0.078/2 # from DHS data - see Get_pregnancy_rate.R
+      if (RTSS == "SVmass+EPI" | RTSS == 'SVmass+hybrid' | RTSS == 'mass+EPI') {
         
-        # add mass vaccination for taking into account pregnant women
+        params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
+        peak <- peak_season_offset(params)
+        massboosters <- if(fifth == 0) round(c(12 * month + 2 * month)) else round(c(12 * month + 2 * month, 24 * month + 2 * month))
+        boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
+        
+        if(RTSS == 'SVmass+EPI' | RTSS == "mass+EPI"){
+          # First set the EPI strategy 
+          EPIboosters <- if(fifth == 0) round(c(12 * month)) else round(c(12 * month, 24 * month)) # from phase III R21 trial
+          pevtimesteps <- warmup + program_start # starting when warmup ends
+          
+          params <- set_pev_epi(
+            parameters = params,
+            profile = rtss_profile,
+            timesteps = pevtimesteps,
+            coverages = RTSScov,
+            age = round(5 * month),
+            min_wait = 0,
+            booster_timestep = EPIboosters,
+            booster_coverage = boost_cov,
+            booster_profile = list(rtss_booster_profile),
+            seasonal_boosters = FALSE)
+        } else if (RTSS == 'SVmass+hybrid'){
+          # Set the hybrid strategy
+          hybridboosters <- if(fifth == 0) round(c(peak - 0.5 * month), 0) else round(((peak - 0.5 * month) + c(0, year)), 0)
+          pevtimesteps <- warmup + program_start # starting when warmup ends
+          
+          params <- set_pev_epi(
+            parameters = params,
+            profile = rtss_profile,
+            timesteps = pevtimesteps,
+            coverages = RTSScov,
+            age = round(5 * month),
+            min_wait = 0,
+            booster_timestep = hybridboosters,
+            booster_coverage = boost_cov,
+            booster_profile = list(rtss_booster_profile),
+            seasonal_boosters = TRUE) 
+        }
+      
+      
+        # Get timing for mass vaccination rounds
+        if(RTSS == 'SVmass+EPI' | RTSS == 'SVmass+hybrid'){
+          first <- round(warmup + program_start + (peak - month * 3.5), 0) # start a year later
+        } else if(RTSS == 'mass+EPI'){
+          first <- round(warmup + program_start)
+        }
+        
+        if (RTSSrounds == 'single'){
+          pevtimesteps <- c(first)
+        } else if (RTSSrounds == 'every 3 years'){
+          pevtimesteps <- c(first, first + seq(3 * year, sim_length, 3 * year))
+        }
+      
+        # Next, set the mass vaccination strategy in addition to routine vaccination
+        # if(RTSSage %in% c('young children', 'all children', 'under 5s')){
+        #   min_wait = 3 * year  # I have no idea what the min wait would actually be - if vaccinated around 6 m, then next would be around 3.5-4 yrs old.
+        # } else {
+        #   min_wait = 1 * month
+        # }
+        
+        if(RTSSage != 'everyone'){
+          params <- set_mass_pev(
+            parameters = params,
+            profile = rtss_profile,
+            timesteps = pevtimesteps,
+            coverages = rep(RTSScov, length(pevtimesteps)),
+            min_ages = min_ages,
+            max_ages = max_ages,
+            min_wait = 0,#min_wait,
+            booster_timestep = massboosters,
+            booster_coverage = rep(boost_cov, length(massboosters)),
+            booster_profile = list(rtss_booster_profile))
+        } else if(RTSSage == 'everyone'){
+          proppop_notpregnant <- 1 - 0.078/2 # from DHS data - see Get_pregnancy_rate.R
+          
+          # add mass vaccination for taking into account pregnant women
+          params <- set_mass_pev(
+            parameters = params,
+            profile = rtss_profile,
+            timesteps = pevtimesteps, 
+            coverages = rep(RTSScov * proppop_notpregnant, length(pevtimesteps)), 
+            min_ages = min_ages,
+            max_ages = max_ages,
+            min_wait = 0,#min_wait,
+            booster_timestep = massboosters, # timesteps following initial vaccination 
+            booster_profile = list(rtss_booster_profile),
+            booster_coverage = rep(boost_cov, length(massboosters)) # prop of vaccinated pop who will receive booster vaccine
+          )
+        }
+        
+        # var for outputting to check RTS,S timings are correct
+        print(paste0("Mass timesteps: ", mass_pev_timesteps <- params$mass_pev_timesteps - warmup))
+        print(paste0('EPI timesteps: ', pev_epi_timesteps <- params$pev_epi_timesteps - warmup))
+        print(paste0('EPI booster: ', params$pev_epi_booster_timestep))
+        print(paste0('Mass booster: ', params$mass_pev_booster_timestep))
+      }
+      
+      # hybrid ----------
+      if (RTSS == "hybrid") {
+        params$pev_doses <- round(c(0, 1 * month, 2 * month)) # spacing from phase iii trial R21
+        
+        peak <- peak_season_offset(params)
+        first <- round(warmup + program_start + (peak - month * 3.5), 0)
+        boosters <- if(fifth == 0) round(c(first - warmup + 3 * month), 0) else round(((first - warmup + 3 * month) + c(0, year)), 0)
+        boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
+        pevtimesteps <- warmup + program_start# starting when warmup ends
+        
+        params <- set_pev_epi(
+          parameters = params,
+          profile = rtss_profile,
+          timesteps = pevtimesteps,
+          coverages = RTSScov,
+          age = round(5 * month),
+          min_wait = 0,
+          booster_timestep = boosters,
+          booster_coverage = boost_cov,
+          booster_profile = list(rtss_booster_profile),
+          seasonal_boosters = TRUE
+        ) 
+      }
+      
+      if (RTSS == 'SV'){ # only to children 5-17 months of age
+        params$pev_doses <- round(c(0, 1 * month, 2 * month)) # spacing from phase iii trial R21
+        
+        peak <- peak_season_offset(params)
+        first <- round(warmup + program_start + (peak - month * 3.5), 0)
+        pevtimesteps <- c(first)
+        boosters <- if(fifth == 0) round(c(first - warmup + 3 * month), 0) else round(((first - warmup + 3 * month) + c(0, year)), 0)
+        boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
+        
         params <- set_mass_pev(
-          parameters = params,
+          params,
           profile = rtss_profile,
-          timesteps = masspevtimesteps, 
-          coverages = rep(RTSScov * proppop_notpregnant, length(pevtimesteps)), 
+          timesteps = pevtimesteps, 
+          coverages = rep(RTSScov, length(pevtimesteps)), 
           min_ages = min_ages,
           max_ages = max_ages,
-          min_wait = 0,#min_wait,
-          booster_timestep = massboosters, # timesteps following initial vaccination 
+          min_wait = 0,
+          booster_timestep = boosters, # timesteps following initial vaccination 
           booster_profile = list(rtss_booster_profile),
-          booster_coverage = rep(boost_cov, length(massboosters)) # prop of vaccinated pop who will receive booster vaccine
+          booster_coverage = rep(boost_cov, length(boosters)) # prop of vaccinated pop who will receive booster vaccine
         )
       }
       
-      # var for outputting to check RTS,S timings are correct
-      print(paste0("Mass timesteps: ", mass_pev_timesteps <- params$mass_pev_timesteps - warmup))
-      print(paste0('EPI timesteps: ', pev_epi_timesteps <- params$pev_epi_timesteps - warmup))
-      print(paste0('EPI booster: ', params$pev_epi_booster_timestep))
-      print(paste0('Mass booster: ', params$mass_pev_booster_timestep))
-    }
-    
-    # hybrid ----------
-    if (RTSS == "hybrid") {
-      params$pev_doses <- round(c(0, 1 * month, 2 * month)) # spacing from phase iii trial R21
-      
-      peak <- peak_season_offset(params)
-      first <- round(warmup + program_start + (peak - month * 3.5), 0)
-      boosters <- if(fifth == 0) round(c(first - warmup + 3 * month), 0) else round(((first - warmup + 3 * month) + c(0, year)), 0)
-      boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
-      pevtimesteps <- warmup + program_start# starting when warmup ends
-      
-      params <- set_pev_epi(
-        parameters = params,
-        profile = rtss_profile,
-        timesteps = pevtimesteps,
-        coverages = RTSScov,
-        age = round(5 * month),
-        min_wait = 0,
-        booster_timestep = boosters,
-        booster_coverage = boost_cov,
-        booster_profile = list(rtss_booster_profile),
-        seasonal_boosters = TRUE
-      ) 
+      if (RTSS == 'catch-up'){
+        
       }
-    
-    if (RTSS == 'SV'){ # only to children 5-17 months of age
-      params$pev_doses <- round(c(0, 1 * month, 2 * month)) # spacing from phase iii trial R21
-      
-      peak <- peak_season_offset(params)
-      first <- round(warmup + program_start + (peak - month * 3.5), 0)
-      pevtimesteps <- c(first)
-      boosters <- if(fifth == 0) round(c(first - warmup + 3 * month), 0) else round(((first - warmup + 3 * month) + c(0, year)), 0)
-      boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
-      
-      params <- set_mass_pev(
-        params,
-        profile = rtss_profile,
-        timesteps = pevtimesteps, 
-        coverages = rep(RTSScov, length(pevtimesteps)), 
-        min_ages = min_ages,
-        max_ages = max_ages,
-        min_wait = 0,
-        booster_timestep = boosters, # timesteps following initial vaccination 
-        booster_profile = list(rtss_booster_profile),
-        booster_coverage = rep(boost_cov, length(boosters)) # prop of vaccinated pop who will receive booster vaccine
-      )
-    }
-    
-    if (RTSS == 'catch-up'){
-      
-    }
     }
     
     # MDA  ----------
@@ -480,12 +481,13 @@ generate_params <- function(inputpath,   # path to input scenarios
       
       proppop_notpregnant <- 1 - 0.078/2 # from DHS data - see Get_pregnancy_rate.R
       
+      # https://www.who.int/publications/i/item/9789241513104 - for drug, min_ages, and coverage (pregnancy)
       params <- set_mda(
         parameters = params,
-        drug = 2, # SP-AQ for MDA 
+        drug = 1, # AL for MDA 
         timesteps = mdatimesteps,
         coverages = rep(MDAcov * proppop_notpregnant, length(mdatimesteps)), # excluding pregnant women
-        min_ages = rep(0, length(mdatimesteps)),
+        min_ages = rep(6 * month, length(mdatimesteps)), # starting from 6 months of age 
         max_ages = rep(100 * 365, length(mdatimesteps))
       ) 
     }
