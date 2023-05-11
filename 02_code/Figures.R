@@ -102,7 +102,7 @@ plot_out_averted <- function(outcome, prev, seas, rtss){
     } else if(outcome == 'severe_avertedper1000vax'){
       out_label <- 'Severe cases averted per \n1000 fully vaccinated people'
     } 
-    output$int_ID_lab <- paste0(output$RTSS, " to ", output$RTSSage, ', ', output$RTSSrounds, '; ', MDAtiming)#str_sub(output$int_ID, 6, -3)
+    output$int_ID_lab <- paste0(output$RTSS, " to ", output$RTSSage, ', ', output$RTSSrounds, '; ', output$MDAtiming)#str_sub(output$int_ID, 6, -3)
   
     plt <- ggplot(output %>% filter(pfpr == prev) %>% filter(seasonality == seas) %>% filter(grepl(rtss, RTSS))) +
       geom_col(aes(x = age_grp, y = .data[[paste0(outcome, "_median")]], group = int_ID_lab, fill = int_ID_lab), 
@@ -128,8 +128,12 @@ plot_total_averted <- function(df, outcome, total = TRUE, labtitle){
   #' output: plot of total outcomes averted grouped by vaccine strategy and faceted by seasonality 
   
   # df <- readRDS(paste0(HPCpath,'HPC_5355/HPC_summarized/aggregatedoversim_1_105.rds'))
-  lab_col <- c("#450061", "#7C00AD", "#AD0911", "#E3595F", "#48610A", "#BAFA19", "#87B3F5", 
-               "#6580A8", "#394EA8", "#F5E57B", "#FFD83E", "#29A8AD", "#005E61", "#F556C4", "#A83284")
+  lab_col <- c("#450061", "#7C00AD", # routine (EPI or hybrid)
+               "#AD0911", "#E3595F", "#FA55B0", "#A83284", # mass + EPI
+               "#87B3F5", "#6580A8", "#394EA8", "#283675", # SVmass + EPI
+               "#87F6FA", "#66D1B8", "#29A8AD", "#005E61", # SV mass + hybrid
+               "#48610A", "#BAFA19",
+               "#F5E57B", "#FFD83E")
   # first need to group the dataset by int_ID
   df2 <- df %>%
     select(!starts_with("u5")) %>%
@@ -167,16 +171,39 @@ plot_total_averted <- function(df, outcome, total = TRUE, labtitle){
     theme_bw()
   plt
 }
-# plot_total_averted(df, 'cases_averted')
 
+plot_cases_averted_by_age <- function(df){
+  
+}
 
 # Incidence by 1 year age group over time ----
-plot_inci_age <- function(){
+plot_inci_age <- function(df){
   #' input: HPC_summ output paste0(HPCpath,'./HPC_summarized/aggregatedoversim_1_',length(index),'.rds')
   #'  age_split: 1yr or 5yr
   #' output: line plot of x = year, y = incidence, grouped by age group  
   
   # df <- readRDS(paste0(HPCpath,'HPC_5355/HPC_summbyyr/outcomes_byyear_1_105.rds'))
   ggplot(df) +
-    geom_line(aes(x = year, y = inc_clinical_median, group = age_grp, color = age_grp))
+    geom_line(aes(x = year, y = inc_clinical, group = age_grp, color = age_grp))
+}
+
+
+# Function to plot all runs of a specific scenario to see if there are any reaching elimination 
+plot_all_runs <- function(){
+  df <- readRDS(paste0(HPCpath, "03_output/output_byyear_byage_draws.rds"))
+  
+  ggplot(d <- df %>% filter(int_ID == "0.03_seasonal_mass+EPI_0.8_everyone_every 3 years_0_0.8_during")) + 
+    geom_line(aes(x = year, y = n_detect_730_3650, group = as.factor(drawID), color = as.factor(drawID)))
+  
+  ggplot(d <- df %>% filter(int_ID == "0.03_perennial_mass+EPI_0.8_everyone_every 3 years_0_0_none")) + 
+    geom_line(aes(x = year, y = n_infections, group = drawID))
+  
+  ggplot(d <- df %>% filter(int_ID == "0.03_perennial_EPI_0.8_young children_none_0_0.8_during")) + 
+    geom_line(aes(x = year, y = n_infections, group = drawID))
+  
+  ggplot(d <- df %>% filter(int_ID == "0.03_perennial_mass+EPI_0.8_everyone_every 3 years_0_0.8_during")) + 
+    geom_line(aes(x = year, y = n_infections, group = drawID))
+  
+  ggplot(d <- df %>% filter(int_ID == "0.03_perennial_mass+EPI_0.8_school-aged_every 3 years_0_0_none")) + 
+    geom_line(aes(x = year, y = n_infections, group = drawID))
 }

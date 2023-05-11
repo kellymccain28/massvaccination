@@ -11,15 +11,16 @@ source('02_code/packages_data.R')
 year <- 365
 
 # population
-population <- 100000 # increased from 50,000 
+population <- 100000 # increased from 50,000 c(1000,50000,100000)
 
 # run time
-warmup <- 15 * year       # needs to be multiple of 3 for ITN distribution
+warmup <- 15 * year       # 
 sim_length <- 21 * year   # value > 0 
 
 # number of parameter draws
 # 0 = use mean values, 1 to 50 = draws
-drawID <- c(0, 1:50)
+drawID <- c(0, 942,  40, 541, 497, 877, 697, 400, 450, 806, 600, 670, 363, 838, 478, 403, 375, 335, 598, 142, 919, 444, 986, 659,  71, 457,
+            891, 188, 432, 975, 488, 867, 538, 912, 534, 215, 540, 866, 613, 973, 917, 937, 931, 296, 835, 328, 147, 701, 889, 708, 888)# c(0, sample(1:1000, 50))#c(0, 1:50)
 
 # SITE set-up ----
 # parasite prevalence 2-10 year olds
@@ -93,7 +94,7 @@ fifth <- c(0)
 # adding vaccine boosters: 0 - no fifth dose, fifth (2 booster doses), annual (every year), 6mo (every 6 months), 2yrs (every 2 years)
 booster_rep <- c(0, 'annual')
 
-interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, MDAcov, MDAtiming)
+interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, booster_rep, MDAcov, MDAtiming)
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
@@ -116,8 +117,8 @@ combo <- combo |>
   filter(!(MDAcov > 0 & MDAtiming == 'none')) |> # can't have coverage of MDA and no timing of MDA
   filter(!(MDAcov == 0 & MDAtiming == 'during')) |> # can't have coverage of MDA at 0% and MDA during vax
   filter(!(seas_name == 'seasonal' & RTSS == 'mass+EPI')) |> # no non-seasonal mass vaccination in seasonal areas
-  filter(!(booster_rep == 'annual' & RTSS %in% c('hybrid', 'EPI'))) # no annual boosters for EPi and hybrid vaccination
-  
+  filter(!(booster_rep == 'annual' & RTSS %in% c('hybrid', 'EPI'))) |> # no annual boosters for EPi and hybrid vaccination
+  filter(!(booster_rep %in% c('annual', '6mo', '2yrs') & RTSSrounds == 'every 3 years')) # for now, there cannot be a repeated 
 
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -139,7 +140,8 @@ combo <- combo |>
          RTSScov,           # RTS,S coverage
          RTSSage,           # RTS,S age groups
          RTSSrounds,        # RTS,S rounds of mass vax
-         fifth,             # status of 5th dose for mass or hybrid strategies
+         fifth,             # status of 5th dose for EPI or hybrid strategies
+         booster_rep,       # how many boosters 
          MDAcov,            # MDA coverage
          MDAtiming,         # timing of MDA round
          ID,                # name of output file
@@ -148,10 +150,11 @@ combo <- combo |>
 
 # rearrange so new ones are at the end 
 # new <- combo |>
-#   filter(RTSSrounds=='every 3 years' | RTSS == 'mass+EPI' | pfpr == 0.03)
+#   filter(RTSSrounds!='every 3 years' & booster_rep == 'annual')
 # combo <- combo |>
-#   filter(!(RTSSrounds=='every 3 years' | RTSS == 'mass+EPI' | pfpr == 0.03)) |>
+#   filter(!(RTSSrounds!='every 3 years' & booster_rep == 'annual')) |>
 #   rbind(new)
+
 
 saveRDS(combo, paste0(path, '03_output/scenarios_torun.rds'))
 
@@ -194,7 +197,7 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 # Run tasks -------------------------------------------------------------------------------------------------------------
 x = c(1:nrow(combo)) # runs
 # x <- which(combo$MDAcov>0 ) # to get only indices where there is MDA because we only need to rerun those
-
+# x <- 9792:nrow(combo) # just the new ones (with annual boosters and 0.01)
 # define all combinations of scenarios and draws
 index <- tibble(x = x)
 
@@ -206,8 +209,8 @@ index <- index |>
   select(-f, -exist)
 
 # run a test with the first scenario
-t <- obj$enqueue_bulk(296, runsim) #936-svmass+hybrid #545
-# t$status()
+t <- obj$enqueue_bulk(13900, runsim) #936-svmass+hybrid #545
+t$status()
 # t$wait(1000)
 #t$results()
 

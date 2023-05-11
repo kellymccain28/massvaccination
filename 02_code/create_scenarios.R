@@ -13,11 +13,12 @@ sim_length <- 12 * year   # value > 0
 
 # number of parameter draws
 # 0 = use mean values, 1 to 50 = draws
-drawID <- c(0, 1:50)
+drawID <- c(0, 942,  40, 541, 497, 877, 697, 400, 450, 806, 600, 670, 363, 838, 478, 403, 375, 335, 598, 142, 919, 444, 986, 659,  71, 457,
+            891, 188, 432, 975, 488, 867, 538, 912, 534, 215, 540, 866, 613, 973, 917, 937, 931, 296, 835, 328, 147, 701, 889, 708, 888)# c(0, 1:50)
 
 # SITE set-up ----
 # parasite prevalence 2-10 year olds
-pfpr <- c(0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.35, 0.45, 0.55, 0.65) # same profiles as Penny et al. 
+pfpr <- c(0.01, 0.03, 0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65) # same profiles as Penny et al. 
 
 # seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
 # drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
@@ -34,7 +35,7 @@ seas_name <- 'perennial'
 seasonality <- list(c(0.2852770,-0.0248801,-0.0529426,-0.0168910,-0.0216681,-0.0242904,-0.0073646))
 s3 <- tibble(seasonality, seas_name)
 
-stable <- bind_rows(s1, s2, s3)
+stable <- bind_rows(s2, s3)#s1, 
 
 # vectors
 # list(arab_params, fun_params, gamb_params)
@@ -63,6 +64,12 @@ treatment <- c(0.45)
 # SMC: 0, 1
 SMC <- c(0) 
 
+# MDAcoverage
+MDAcov <- c(0)
+
+# MDA timing
+MDAtiming <- c('none') #'prior', , 'after'
+
 # RTS,S: none, EPI, SV, hybrid
 RTSS <- c('none') 
 
@@ -72,8 +79,14 @@ RTSSage <- c(0)#c('all children','everyone','school-aged','under 5s','young chil
 # RTS,S coverage
 RTSScov <- c(0) 
 
+# RTSS rounds
+RTSSrounds <- c('none')
+
 # adding a fifth RTS,S dose: 0, 1
 fifth <- c(0)  
+
+# adding vaccine boosters: 0 - no fifth dose, fifth (2 booster doses), annual (every year), 6mo (every 6 months), 2yrs (every 2 years)
+booster_rep <- c(0)
 
 interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, MDAcov, MDAtiming)
 
@@ -123,7 +136,7 @@ setwd(HPCpath)
 
 # to edit HPC username and password below
 # usethis::edit_r_environ()
-share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")
+share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")#'kem22','Q:','//qdrive.dide.ic.ac.uk/homes','Q:')
 
 config <- didehpc::didehpc_config(credentials = list(
   username = Sys.getenv("DIDE_USERNAME"),
@@ -132,12 +145,11 @@ config <- didehpc::didehpc_config(credentials = list(
   shares = share,
   use_rrq = FALSE,
   cores = 1,
-  cluster = "fi--dideclusthn",#"fi--didemrchnb",
-  template = "32Core", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
-  parallel = FALSE)
+  cluster = "fi--dideclusthn", #"fi--didemrchnb",
+  template = '8Core',#"32Core","GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
+  parallel = FALSE) 
 
-src <- conan::conan_sources(c("github::mrc-ide/malariasimulation", "github::mrc-ide/cali"))
-
+src <- conan::conan_sources(c("github::mrc-ide/malariasimulation@dev", "github::mrc-ide/cali"))
 
 ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
                              sources = c(paste0(HPCpath, '02_code/Functions/eir_prev_matching.R')),
@@ -170,10 +182,10 @@ sjob <- function(x, y){
   print(paste0(x, ' to ', y))
 }
 
-map2_dfr(seq(1, nrow(index), 30),
-         seq(30, nrow(index), 30),
+map2_dfr(seq(1, nrow(index)-100, 100),
+         seq(100, nrow(index), 100),
          sjob)
-
+# map2_dfr(900,918, sjob)
 ### Do PfPR/EIR matching without cluster -----
 # source('02_code/Functions/eir_prev_matching.R')
 # 

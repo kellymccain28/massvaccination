@@ -1,9 +1,12 @@
 # Processing the model runs from the HPC 
 
 source('02_code/packages_data.R')
-source(paste0(HPCpath, '02_code/Functions/HPC_processing.R'))
+source(paste0(HPCpath, '02_code/Functions/HPC_processing_age.R'))
+source(paste0(HPCpath, '02_code/Functions/HPC_processing_age_yr.R'))
+source(paste0(HPCpath, '02_code/Functions/HPC_processing_yr.R'))
+source(paste0(HPCpath, '02_code/Functions/HPC_processing_month_dose.R'))
 source(paste0(path, '02_code/Functions/calc_deaths_dalys.R'))
-
+source(paste0(path, '02_code/Functions/outcomes_averted.R'))
 
 # Set up cluster ----------------------------------------------------------
 setwd(HPCpath)
@@ -24,7 +27,10 @@ config <- didehpc::didehpc_config(credentials = list(
 src <- conan::conan_sources(c("github::mrc-ide/malariasimulation"))
 
 ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
-                             sources = c(paste0(HPCpath, '02_code/Functions/HPC_processing.R')),
+                             sources = c(paste0(HPCpath, '02_code/Functions/HPC_processing_age.R'),
+                                         paste0(HPCpath, '02_code/Functions/HPC_processing_age_yr.R'),
+                                         paste0(HPCpath, '02_code/Functions/HPC_processing_yr.R'),
+                                         paste0(HPCpath, '02_code/Functions/HPC_processing_month_dose.R')),
                              packages = c("dplyr", "malariasimulation"),
                              package_sources = src)
 
@@ -49,7 +55,6 @@ process_summ_runs <- function(x){
   end <- Sys.time()
   print(end-start)
 }
-# index <- which(combo$MDAcov>0)# index <- which(combo$MDAcov>0)
 
 map_dfr(index, process_summ_runs)
 
@@ -77,10 +82,10 @@ dat_list_5y <- lapply(files_5y, function (x) readRDS(x))
 
 # Bind the files together and add group ID for intervention scenario
 dalyoutput <- bind_rows(dat_list) |>
-  group_by(pfpr, seasonality, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, MDAcov, MDAtiming, int_ID) |>
+  group_by(pfpr, seasonality, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, booster_rep, MDAcov, MDAtiming, int_ID) |>
   mutate(group = cur_group_id()) |> ungroup()#, fill = TRUE, idcol = "identifier")
 dalyoutput_5y <- bind_rows(dat_list_5y) |>
-  group_by(pfpr, seasonality, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, MDAcov, MDAtiming, int_ID) |>
+  group_by(pfpr, seasonality, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, booster_rep, MDAcov, MDAtiming, int_ID) |>
   mutate(group = cur_group_id()) |> ungroup()#, fill = TRUE, idcol = "identifier")
   
 # save output
@@ -109,7 +114,6 @@ df <- readRDS(paste0(HPCpath, "scenarios_draws.rds"))
 df_5y <- readRDS(paste0(HPCpath, "scenarios_draws_5y.rds"))
 index <- seq(1, max(df$group), 1)
 
-source(paste0(HPCpath,'02_code/Functions/HPC_processing.R'))
 output <- map_dfr(index, get_cr_int, df)
 output_5y <- map_dfr(index, get_cr_int, df_5y)
 
@@ -190,7 +194,7 @@ agg <- output |>
   group_by(int_ID) |>
   summarise(across(c(dalys_averted_lower:u5_severe_avertedper1000vax_upper), sum)) |>
   distinct() |>
-  tidyr::separate(int_ID, into = c('PfPR','Seasonality','Vaccination strategy','Coverage','Age group vaccinated','Rounds','Fifth', 'MDA','MDAtiming'), sep="_") |>
+  tidyr::separate(int_ID, into = c('PfPR','Seasonality','Vaccination strategy','Coverage','Age group vaccinated','Rounds','Fifth', 'Boosters', 'MDA','MDAtiming'), sep="_") |>
   group_by(PfPR, Seasonality) |>
   arrange(PfPR, Seasonality) |>
   mutate(across(c(dalys_averted_lower:u5_severe_avertedper1000vax_upper), as.numeric)) |>
@@ -266,7 +270,7 @@ agg <- output |>
   group_by(int_ID) |>
   summarise(across(c(dalys_averted_lower:u5_severe_avertedper1000vax_upper), sum)) |>
   distinct() |>
-  tidyr::separate(int_ID, into = c('PfPR','Seasonality','Vaccination strategy','Coverage','Age group vaccinated','Rounds','Fifth', 'MDA','MDAtiming'), sep="_") |>
+  tidyr::separate(int_ID, into = c('PfPR','Seasonality','Vaccination strategy','Coverage','Age group vaccinated','Rounds','Fifth', 'Boosters', 'MDA','MDAtiming'), sep="_") |>
   # group_by(Seasonality) |>
   # arrange(Seasonality) |>
   mutate(across(c(dalys_averted_lower:u5_severe_avertedper1000vax_upper), as.numeric)) |>
@@ -303,7 +307,7 @@ maxdaly1000 <- which(agg$maxdaly1000 == 1)
 maxdeath1000 <- which(agg$maxdeath1000 == 1) 
 
 agg_out <- agg |>
-  select(PfPR:Fifth, `Cases averted`:`Deaths averted per 1000 vaccinated`, -Coverage, -Fifth) |>
+  select(PfPR:Boosters, `Cases averted`:`Deaths averted per 1000 vaccinated`, -Coverage, -Fifth) |>
   flextable()|>
   width(j=c(1,2,3,4,5), width = 0.7) |>
   width(j=c(6,7,8,9), width = 2) |>
@@ -356,11 +360,11 @@ severeavper1000 <- plot_total_averted(df, outcome = "severe_avertedper1000vax", 
 ## Run the summarize function to get annual prevalence
 scenarios <- readRDS(paste0(HPCpath,'03_output/parameters_torun.rds'))
 index <- c(1:nrow(scenarios)) # runs
-# index <- c(2636:nrow(scenarios))
+# index <- c(10648:nrow(scenarios))
 # source(paste0(HPCpath, '02_code/')
 
 # run a test with the first scenario
-t <- obj$enqueue_bulk(3:5, process_runs_byyr) #936-svmass+hybrid #545
+t <- obj$enqueue_bulk(3219:3220, process_runs_byyr) #936-svmass+hybrid #545
 t$status()
 #t$results()
 
@@ -374,9 +378,9 @@ map2_dfr(seq(0, length(index)- 100, 100),
          seq(99, length(index), 100),
          sjob)
 #Submit last jobs
-index <- 5300:5355# 1800:1836
+# index <- 5300:5355# 1800:1836
 obj$enqueue_bulk(index, process_runs_byyr)
-
+# index <- 10000:10710
 # map_dfr(index, process_runs_byyr)
 
 
@@ -386,8 +390,8 @@ obj$enqueue_bulk(index, process_runs_byyr)
 files <- list.files(path = paste0(HPCpath, "HPC_summbyyr/"), pattern = "run_summ*", full.names = TRUE) 
 files <- data.frame(filenames = files) |>
   mutate(file = filenames) |>
-  tidyr::separate(filenames, into = c('HPC',"run","summ",'draw','pfpr','seas','RTSS','RTSScov','RTSSage','RTSSrounds','fifth'), sep="_") %>%
-  group_by(pfpr, seas, RTSS, RTSScov, RTSSage, RTSSrounds, fifth) |>
+  tidyr::separate(filenames, into = c('HPC',"run","summ",'draw','pfpr','seas','RTSS','RTSScov','RTSSage','RTSSrounds','fifth', 'MDAcov', 'MDAtiming'), sep="_") %>% #'booster_rep', 
+  group_by(pfpr, seas, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, MDAcov, MDAtiming) |> #'booster_rep', 
   mutate(group = cur_group_id()) 
 
 index <- seq(1, max(files$group),1)
@@ -400,7 +404,6 @@ index <- seq(1, max(files$group),1)
 # 
 # obj$enqueue_bulk(index, get_annu_cr_int)
 
-source(paste0(HPCpath,'02_code/Functions/HPC_processing.R'))
 output <- map_dfr(index, get_annu_cr_int)
 
 saveRDS(output, paste0(HPCpath,'./HPC_summbyyr/outcomes_byyear_1_',length(index),'.rds'))
@@ -437,7 +440,7 @@ lapply(prev, outcome = 'sev_1825_5475', plot_annual_outcome)
 # Process model runs to show doses ----------------------------------------
 scenarios <- readRDS(paste0(HPCpath,'03_output/parameters_torun.rds'))
 index <- c(1:nrow(scenarios)) # runs
-index <- 1:5355
+# index <- 1:5355
 
 # Save summarized df for each of the runs
 lapply(index, summ_fordose)
@@ -457,9 +460,9 @@ out <- bind_rows(dat_list) |>
   mutate(group = cur_group_id()) |> ungroup()#, fill = TRUE, idcol = "identifier")
 
 # save output
-saveRDS(out, paste0(HPCpath, "03_output/output_5355_preMDA/output_bydoses_summ_draws.rds"))
+saveRDS(out, paste0(HPCpath, "03_output/output_bydoses_summ_draws.rds"))
 
-out <- readRDS(paste0(HPCpath, "03_output/output_5355_preMDA/output_bydoses_summ_draws.rds")) |>
+out <- readRDS(paste0(HPCpath, "03_output/output_bydoses_summ_draws.rds")) |>
   group_by(int_ID, month, dose) |> 
   mutate(group = cur_group_id()) |> ungroup()
 index <- 1:max(out$group)
@@ -467,10 +470,10 @@ index <- 1:max(out$group)
 summarized_cr_doses <- lapply(index, get_cr_int_doses)
 summarized_cr_doses_agg <- bind_rows(summarized_cr_doses)
 
-saveRDS(summarized_cr_doses_agg, paste0(HPCpath,'HPC_5355/HPC_bydose/outcomes_byyear_1_',length(index),'.rds'))
+saveRDS(summarized_cr_doses_agg, paste0(HPCpath,'HPC_bydose/outcomes_byyear_1_',length(index),'.rds'))
 
 # Plot vaccination strategies and doses ----
-df <- readRDS(paste0(HPCpath,'HPC_5355/HPC_bydose/outcomes_byyear_1_',length(index),'.rds'))
+df <- readRDS(paste0(HPCpath,'HPC_bydose/outcomes_byyear_1_',length(index),'.rds'))
 plot_doses(df, seas = 'seasonal', prevalence = 0.03)
 plot_doses(df, seas = 'perennial', prevalence = 0.03)
 
@@ -479,45 +482,118 @@ plot_doses(df, seas = 'perennial', prevalence = 0.03)
 # Process model runs to get 1 line per age group per year ----------------------------------------
 ## Run the summarize function to get annual prevalence
 scenarios <- readRDS(paste0(HPCpath,'03_output/parameters_torun.rds'))
-# index <- c(1:nrow(scenarios)) # runs
-index <- 408:5355
+index <- c(1:nrow(scenarios)) # runs
+index <- 4074:nrow(scenarios)
 #######################
 ########################## **** need to replace rtss with pev in function***********
 #######################
-map_dfr(index, process_age_yr)
+# Calculate deaths, yld, ylls and outcomes averted 
+process_by_age_year <- function(x){
+  start <- Sys.time()
+  out_averted <- process_age_yr(x) |>
+    mortality_rate() |>
+    outcome_uncertainty() |>
+    daly_components() 
+  
+  print(paste0('Saving run ', x))
+  saveRDS(out_averted, paste0(HPCpath, 'HPC_summbyyrbyage/run_summ_', x, '_', out_averted$int_ID[1], '.rds'))
+  
+  end <- Sys.time()
+  print(end-start)
+}
+map_dfr(index, process_by_age_year)
+
 
 # run a test with the first scenario
-t <- obj$enqueue_bulk(1:2, process_age_yr) 
-t$status()
+# t <- obj$enqueue_bulk(1:2, process_age_yr) 
+# t$status()
 #t$results()
 
 # submit jobs, 100 as a time
-sjob <- function(x, y){
-  t <- obj$enqueue_bulk(index[x:y], process_age_yr)
-  return(1)
-}
+# sjob <- function(x, y){
+#   t <- obj$enqueue_bulk(index[x:y], process_age_yr)
+#   return(1)
+# }
 
-map2_dfr(seq(0, length(index)- 100, 100),
-         seq(99, length(index), 100),
-         sjob)
-#Submit last jobs
-index <- 5300:5355# 1800:1836
-obj$enqueue_bulk(index, process_age_yr)
+# map2_dfr(seq(0, length(index)- 100, 100),
+#          seq(99, length(index), 100),
+#          sjob)
+# #Submit last jobs
+# index <- 5300:5355# 1800:1836
+# obj$enqueue_bulk(index, process_age_yr)
 
 # Get credible intervals for the runs by age/by year
-files <- list.files(path = paste0(HPCpath, "HPC_5355/HPC_summbyyrbyage/"), pattern = "run_summ_*", full.names = TRUE) 
+files <- list.files(path = paste0(HPCpath, "HPC_summbyyrbyage/"), pattern = "run_summ_*", full.names = TRUE) 
 dat_list <- lapply(files, function (y) readRDS(y))
 
 # Bind the files together and add group ID for intervention scenario
-out <- bind_rows(dat_list) |>
+out_averted_all <- bind_rows(dat_list) |>
   group_by(int_ID, year, age_grp) |> 
   mutate(group = cur_group_id()) |> ungroup()#, fill = TRUE, idcol = "identifier")
 
 # save output
-saveRDS(out, paste0(HPCpath, "03_output/output_5355_preMDA/output_byyear_byage_draws.rds"))
+saveRDS(out_averted_all, paste0(HPCpath, "03_output/output_byyear_byage_draws.rds"))
+
+# Calculate outcomes averted ----------------------------------------------
+
+source(paste0(path, "02_code/Functions/outcomes_averted.R"))
+out_averted_all <- readRDS(paste0(HPCpath, "03_output/output_byyear_byage_draws.rds"))
+output <- out_averted_all %>% 
+  filter(drawID ==0) %>% 
+  outcomes_averted(byyear = TRUE)
+
+# save output with outcomes averted both on local machine and on shared drive
+saveRDS(output, paste0(path, "03_output/output_byyear_byage_median.rds"))
+saveRDS(output, paste0(HPCpath, "03_output/output_byyear_byage_median.rds"))
 
 # get credible intervals 
-out <- readRDS(paste0(HPCpath, "03_output/output_5355_preMDA/output_byyear_byage_draws.rds"))
-index <- 1:max(out$group)
-map_dfr(index, get_age_yr_cr)
+output <- readRDS(paste0(HPCpath, "03_output/output_byyear_byage_median.rds"))
+# index <- 1:max(out$group)
+# output_cr <- map_dfr(index, get_age_yr_cr) # this will take 24 hours... 
 
+# output_median <- output %>% 
+#   filter(drawID == 0)
+# 
+# saveRDS(output_median, paste0(HPCpath, "03_output/output_byyear_byage_median.rds"))
+
+# Plot median cases averted by age group
+lab_col <- c("#450061", "#7C00AD", # routine (EPI or hybrid)
+             "#AD0911", "#E3595F", "#FA55B0", "#A83284", # mass + EPI
+             "#87B3F5", "#6580A8", "#394EA8", "#283675", # SVmass + EPI
+             "#87F6FA", "#66D1B8", "#29A8AD", "#005E61", # SV mass + hybrid
+             "#48610A", "#BAFA19", "lightgreen", "darkgreen",
+             "#F5E57B", "#FFD83E", 'yellow')
+
+plot1 <- ggplot(output %>% filter(seasonality == 'seasonal' & pfpr == 0.25 & 
+                           RTSSrounds == 'single' &
+                           # MDAcov == 0.8 & 
+                           age_grp %in% c('0-5','5-10','10-15','15-20','20-25') &
+                           RTSS != 'SV' & year < 10)) +
+  # geom_col(aes(x = age_grp, y = cases_averted, group = as.factor(year), fill = as.factor(year)), 
+  #           position = 'dodge') + 
+  geom_col(aes(x = age_grp, y = cases_averted, group = as.factor(year), fill = as.factor(year)), position = 'dodge') +
+  facet_wrap(~RTSS + RTSSage + MDAcov) +
+  # scale_fill_manual(values = lab_col) +
+  labs(y = 'Cases Averted',
+       x = "Year",
+       # title = labtitle,
+       fill = 'Year') +
+  theme_bw()
+
+plot2 <- ggplot(output %>% filter(seasonality == 'seasonal' & pfpr == 0.65 & 
+                           RTSSrounds == 'single' &
+                           # MDAcov == 0.8 & 
+                           age_grp %in% c('0-5','5-10','10-15','15-20','20-25') &
+                           RTSS != 'SV')) +
+  # geom_col(aes(x = age_grp, y = cases_averted, group = as.factor(year), fill = as.factor(year)), position = 'dodge') + 
+  geom_line(aes(x = year, y = cases_averted, group = age_grp, color = age_grp), linewidth = 1) +
+  facet_wrap(~RTSS + RTSSage + MDAcov) +
+  scale_fill_manual(values = lab_col) +
+  geom_hline(aes(yintercept = 0), color = 'red', linetype = 2) +
+  labs(y = 'Cases Averted',
+       x = "Year",
+       color = 'Age group') +
+  theme_bw()
+
+ggsave(paste0(path, '03_output/Figures/Plot_Cases-averted-year-by-age.png'), plot1, width = 16, height = 10)
+ggsave(paste0(path, '03_output/Figures/Plot_Cases-averted-age-by-year.png'), plot2, width = 16, height = 10)

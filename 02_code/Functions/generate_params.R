@@ -32,6 +32,7 @@ generate_params <- function(inputpath,   # path to input scenarios
     RTSSage = data$RTSSage
     RTSSrounds = data$RTSSrounds
     fifth = data$fifth
+    booster_rep = data$booster_rep
     MDAcov = data$MDAcov
     MDAtiming = data$MDAtiming
     ID = data$ID
@@ -52,16 +53,16 @@ generate_params <- function(inputpath,   # path to input scenarios
     
     # outcome definitions ----------
     # Set clinical incidence rendering 
-    params$clinical_incidence_rendering_min_ages = c(c(0, 0.25, seq(1, 20, by = 1))*year, seq(0, 95, by = 5)*year)
-    params$clinical_incidence_rendering_max_ages = c(c(0.25, seq(1, 21, by = 1))*year, seq(5, 100, by = 5)*year) 
+    params$clinical_incidence_rendering_min_ages = c(c(0, 0.25, seq(1, 20, by = 1))*year, seq(0, 95, by = 5)*year, 0)
+    params$clinical_incidence_rendering_max_ages = c(c(0.25, seq(1, 21, by = 1))*year, seq(5, 100, by = 5)*year, 100*year) 
     
     # Set severe incidence rendering 
-    params$severe_incidence_rendering_min_ages = c(c(0, 0.25, seq(1, 20, by = 1))*year, seq(0, 95, by = 5)*year) 
-    params$severe_incidence_rendering_max_ages = c(c(0.25, seq(1, 21, by = 1))*year, seq(5, 100, by = 5)*year) 
+    params$severe_incidence_rendering_min_ages = c(c(0, 0.25, seq(1, 20, by = 1))*year, seq(0, 95, by = 5)*year, 0) 
+    params$severe_incidence_rendering_max_ages = c(c(0.25, seq(1, 21, by = 1))*year, seq(5, 100, by = 5)*year, 100*year) 
     
     # prevalence 2-10 year olds
-    params$prevalence_rendering_min_ages = 2 * year
-    params$prevalence_rendering_max_ages = 10 * year
+    params$prevalence_rendering_min_ages = c(2 * year, 0 * year)
+    params$prevalence_rendering_max_ages = c(10 * year, 100 * year)
     
     # demography ----------
     flat_demog <- read.table(paste0(path,'/01_data/Flat_demog.txt')) # from mlgts
@@ -354,7 +355,7 @@ generate_params <- function(inputpath,   # path to input scenarios
           # Set the hybrid strategy
           hybridboosters <- if(fifth == 0) round(c(peak - 0.5 * month), 0) else round(((peak - 0.5 * month) + c(0, year)), 0)
           pevtimesteps <- warmup + program_start # starting when warmup ends
-          hybridboos_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) 
+          hybridboost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) 
           
           params <- set_pev_epi(
             parameters = params,
@@ -398,10 +399,10 @@ generate_params <- function(inputpath,   # path to input scenarios
             coverages = rep(RTSScov, length(pevtimesteps)),
             min_ages = min_ages,
             max_ages = max_ages,
-            min_wait = 0,#min_wait,
+            min_wait = 0,
             booster_timestep = massboosters,
             booster_coverage = boost_cov,#rep(boost_cov, length(massboosters)),
-            booster_profile = list(rtss_booster_profile))
+            booster_profile = rep(list(rtss_booster_profile), length(massboosters)))
         } else if(RTSSage == 'everyone'){
           proppop_notpregnant <- 1 - 0.078/2 # from DHS data - see Get_pregnancy_rate.R
           
@@ -413,9 +414,9 @@ generate_params <- function(inputpath,   # path to input scenarios
             coverages = rep(RTSScov * proppop_notpregnant, length(pevtimesteps)), 
             min_ages = min_ages,
             max_ages = max_ages,
-            min_wait = 0,#min_wait,
+            min_wait = 0,
             booster_timestep = massboosters, # timesteps following initial vaccination 
-            booster_profile = list(rtss_booster_profile),
+            booster_profile = rep(list(rtss_booster_profile), length(massboosters)),
             booster_coverage = boost_cov#rep(boost_cov, length(massboosters)) # prop of vaccinated pop who will receive booster vaccine
           )
         }
@@ -529,65 +530,66 @@ generate_params <- function(inputpath,   # path to input scenarios
     
     # parameter draws  ----------
     # choose a parameter draw
+    
     if(drawID > 0){
-      
-      #with malariasimulation@dev 
-      # params <- params |> set_parameter_draw(sample(1:1000,1))
-        
-      
-      d <- readRDS(paste0(path,'03_output/parameter_draws.rds'))[drawID,]
-      
-      # over-write malariasimulation parameters to match the parameter draw
-      params$dd = d$dur_D
-      params$dt = d$dur_T
-      params$da = d$dur_A # value 195 from the old model is the right one! New says 200
-      params$du = d$dur_U
-      params$sigma_squared = d$sigma2
-      params$rm = d$dm
-      params$rvm = d$dvm
-      params$rb = d$db
-      params$rc = d$dc
-      params$rva = d$dv
-      params$rid =	d$dd
-      params$b0 = d$bh
-      params$b1 = d$bmin
-      params$ib0 = d$IB0
-      params$kb = d$kb
-      params$ub = d$ub
-      params$uc = d$uc
-      params$uv = d$uv
-      params$ud = d$ud
-      params$cd = d$cD
-      params$gamma1 = d$gamma_inf
-      params$cu = d$cU
-      params$ct = d$cT # values in malariasim are more precise
-      params$a0 = d$a0
-      params$rho = d$rho
-      params$phi0 = d$phi0
-      params$phi1 = d$phi1
-      params$ic0 = d$IC0
-      params$kc = d$kc
-      params$theta0 = d$theta0
-      params$theta1 = d$theta1
-      params$kv = d$kv
-      params$fv0 = d$fv0
-      params$av = d$av0
-      params$gammav = d$gammav
-      params$iv0 = d$IV0
-      params$de = d$dur_E
-      params$delay_gam = d$latgam
-      params$dem = d$latmosq
-      params$fd0 = d$fd0
-      params$ad = d$ad0
-      params$gammad = d$gammad
-      params$d1 = d$dmin / 1000
-      params$id0 = d$ID0
-      params$kd = d$kd
-      params$average_age = round(1 / d$eta)
-      params$pcm = d$P_IC_M
-      params$pvm = d$P_IV_M
-      
+      params <- set_parameter_draw(params, drawID)
     }
+    #   #with malariasimulation@dev 
+    #   # params <- params |> set_parameter_draw(sample(1:1000,1))
+    #        
+    #   d <- readRDS(paste0(path,'03_output/parameter_draws.rds'))[drawID,]
+    #   
+    #   # over-write malariasimulation parameters to match the parameter draw
+    #   params$dd = d$dur_D
+    #   params$dt = d$dur_T
+    #   params$da = d$dur_A # value 195 from the old model is the right one! New says 200
+    #   params$du = d$dur_U
+    #   params$sigma_squared = d$sigma2
+    #   params$rm = d$dm
+    #   params$rvm = d$dvm
+    #   params$rb = d$db
+    #   params$rc = d$dc
+    #   params$rva = d$dv
+    #   params$rid =	d$dd
+    #   params$b0 = d$bh
+    #   params$b1 = d$bmin
+    #   params$ib0 = d$IB0
+    #   params$kb = d$kb
+    #   params$ub = d$ub
+    #   params$uc = d$uc
+    #   params$uv = d$uv
+    #   params$ud = d$ud
+    #   params$cd = d$cD
+    #   params$gamma1 = d$gamma_inf
+    #   params$cu = d$cU
+    #   params$ct = d$cT # values in malariasim are more precise
+    #   params$a0 = d$a0
+    #   params$rho = d$rho
+    #   params$phi0 = d$phi0
+    #   params$phi1 = d$phi1
+    #   params$ic0 = d$IC0
+    #   params$kc = d$kc
+    #   params$theta0 = d$theta0
+    #   params$theta1 = d$theta1
+    #   params$kv = d$kv
+    #   params$fv0 = d$fv0
+    #   params$av = d$av0
+    #   params$gammav = d$gammav
+    #   params$iv0 = d$IV0
+    #   params$de = d$dur_E
+    #   params$delay_gam = d$latgam
+    #   params$dem = d$latmosq
+    #   params$fd0 = d$fd0
+    #   params$ad = d$ad0
+    #   params$gammad = d$gammad
+    #   params$d1 = d$dmin / 1000
+    #   params$id0 = d$ID0
+    #   params$kd = d$kd
+    #   params$average_age = round(1 / d$eta)
+    #   params$pcm = d$P_IC_M
+    #   params$pvm = d$P_IV_M
+    #   
+    # }
     
     # save as data.frame
     data$params <- list(params)
