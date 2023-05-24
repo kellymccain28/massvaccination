@@ -45,9 +45,9 @@ plot_doses <- function(df, seas, prevalence){
 
 ######
 # Plot annual outcomes including parasite prevalence2-10  (n_detect_730_3650/n_730_3650)
-# input: './HPC_summbyyr/pfpr_byyear_1_x.rds'
+# input: './HPC_summbyyr/pfpr_byyear_1_x.rds'; prev_seas which is a crossing of each variable you want with prev in 1st col and seas in 2nd
 # values possible for outcome: prev_byyear, inc_0_1825, inc_0_91.25, inc_1825_365000, sev_1825_365000, inc_1825_5475, sev_1825_5475
-plot_annual_outcome <- function(prev, outcome){
+plot_annual_outcome <- function(prev, seas_type, outcome){
   if(outcome == 'prev_byyear'){
     out_label <- 'PfPR 2-10'
   } else if(outcome == 'inc_0_1825'){
@@ -63,20 +63,24 @@ plot_annual_outcome <- function(prev, outcome){
   } else if(outcome == 'sev_1825_5475'){
     out_label <- 'Severe incidence per 1000 people aged 5-15y'
   }
-  
-  df_plot <- output %>% filter(pfpr == prev) %>% filter(year < 15)
+
+  df_plot <- output %>% filter(pfpr == prev) %>% filter(year < 13) %>% 
+    filter(RTSS != 'SV') %>%
+    filter(seasonality == seas_type) %>%
+    mutate(facet_lab = paste0(RTSS,"_", RTSSage,"_", RTSSrounds,"_", MDAtiming),
+           year = year - 2) # so that year0 is = program start akka 1 year
   
   plt <- ggplot(df_plot) + 
     geom_ribbon(aes(x = year, ymin = .data[[paste0(outcome, "_lower")]], ymax = .data[[paste0(outcome, "_upper")]]), fill = '#b9ccd3', alpha = 0.7) +
     geom_line(aes(x = year, y = .data[[paste0(outcome, "_median")]]), color = '#17556d') + 
-    facet_wrap(~int_ID) + theme_bw() + 
-    scale_x_continuous(breaks = seq(0,max(df_plot$year), by = 1)) +
-    labs(y = out_label, x = 'Year', title = paste0('Initial PfPR = ', prev)) #+
+    facet_wrap(~facet_lab) + theme_bw() + 
+    scale_x_continuous(breaks = seq(min(df_plot$year),max(df_plot$year), by = 1)) +
+    labs(y = out_label, x = 'Year', title = paste0('Initial PfPR = ', prev, ", ", seas_type)) #+
     # geom_vline(aes(xintercept = 1.5))
   plt
   
   
-  ggsave(paste0(path, '03_output/Figures/', outcome, 'annual_', prev, '.png'), width = 16, height = 9, units = 'in')
+  ggsave(paste0(path, '03_output/Figures/', outcome, 'annual_', prev, "_", seas_type, '.png'), width = 16, height = 9, units = 'in')
 }
 
 #####
@@ -190,13 +194,20 @@ plot_inci_age <- function(df){
 
 # Function to plot all runs of a specific scenario to see if there are any reaching elimination 
 plot_all_runs <- function(){
+  #' input: dataset with all draws combined together 
+  #' process: plot the overall prevalence over time per scenario grouped by drawID
+  #' output: plot with all 51 runs on same plot to visualize the number of runs that resulted in elimination  
   df <- readRDS(paste0(HPCpath, "03_output/output_byyear_byage_draws.rds"))
   
-  ggplot(d <- df %>% filter(int_ID == "0.03_seasonal_mass+EPI_0.8_everyone_every 3 years_0_0.8_during")) + 
-    geom_line(aes(x = year, y = n_detect_730_3650, group = as.factor(drawID), color = as.factor(drawID)))
+  ggplot(df %>% filter(int_ID == "0.03_seasonal_mass+EPI_0.8_everyone_every 3 years_0_0.8_during")) + 
+    geom_line(aes(x = year, y = n_detect_730_3650, group = as.factor(drawID), color = as.factor(drawID))) +
+    theme_bw() +
+    theme(legend.position = 'none') 
   
-  ggplot(d <- df %>% filter(int_ID == "0.03_perennial_mass+EPI_0.8_everyone_every 3 years_0_0_none")) + 
-    geom_line(aes(x = year, y = n_infections, group = drawID))
+  ggplot(d <- df %>% filter(int_ID == "0.03_perennial_mass+EPI_0.8_everyone_single_0_0_none")) + 
+    geom_line(aes(x = year, y = n_infections, group = as.factor(drawID), color = as.factor(drawID))) +
+    theme_bw() +
+    theme(legend.position = 'none') 
   
   ggplot(d <- df %>% filter(int_ID == "0.03_perennial_EPI_0.8_young children_none_0_0.8_during")) + 
     geom_line(aes(x = year, y = n_infections, group = drawID))

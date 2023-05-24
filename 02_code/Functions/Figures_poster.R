@@ -1,6 +1,6 @@
 # Figures for poster
 source(paste0(path, '02_code/Figures.R'))
-output <- readRDS(paste0(HPCpath,'./HPC_summarized/aggregatedoversim_1_',length(index),'_5y.rds')) %>%
+output <- readRDS(paste0(HPCpath,'HPC_5355/HPC_summarized/aggregatedoversim_1_105_5y.rds')) %>%
   filter(RTSSrounds %in% c('single', 'none')) %>%
   mutate(label = paste0(RTSS, " to ", RTSSage, ', ', RTSSrounds))
 
@@ -29,10 +29,12 @@ plot_AVERT <- function(outcome, prev){
   output$int_ID_lab <- paste0(output$vaccination_label, " to ", output$RTSSage)
   output$int_ID_lab <- ifelse(output$int_ID_lab == 'EPI to young children', 'EPI',
                               ifelse(output$int_ID_lab == 'Hybrid to young children', 'Hybrid', output$int_ID_lab))
+  output$int_ID_lab <- ordered(output$int_ID_lab, levels = c('EPI','Hybrid','EPI + seasonal mass vaccination to everyone','EPI + seasonal mass vaccination to school-aged',
+                                                             'Hybrid + seasonal mass vaccination to everyone', 'Hybrid + seasonal mass vaccination to school-aged'))
   
   lab_col <- c("#450061", "#7C00AD", "#AD0911", "#E3595F","#48610A", "#BAFA19")#, "#7CAE00", "#1D471D")
   
-  plt <- ggplot(output %>% filter(pfpr == prev &  seasonality == 'seasonal' & RTSS != 'mass+EPI') %>% filter(age_grp %in% c('0-5', '5-10', '10-15', '15-20', '20-25', '25-30'))) +
+  plt <- ggplot(output %>% filter(pfpr == prev & seasonality == 'seasonal' & RTSS != 'mass+EPI') %>% filter(age_grp %in% c('0-5', '5-10', '10-15', '15-20', '20-25', '25-30'))) +
     geom_col(aes(x = age_grp, y = .data[[paste0(outcome, "_median")]], group = int_ID_lab, fill = int_ID_lab), 
              color = 'black', position = 'dodge') + 
     geom_linerange(aes(x = age_grp, ymin = .data[[paste0(outcome, "_lower")]], ymax = .data[[paste0(outcome, "_upper")]], group = int_ID_lab), 
@@ -70,6 +72,9 @@ deathssavertedplot <- p3 | p4
 deathssavertedplot
 ggsave(paste0(path, '03_output/Figures/deathsavertedplot_forposter.png'), width = 15, height = 8, units = 'in')
 
+legend <- ggpubr::get_legend(p4)
+legend
+ggsave(paste0(path, '03_output/Figures/legend_forposter.png'), plot = legend, width = 15, height = 8, units = 'in')
 
 # table  
 agg <- output |>

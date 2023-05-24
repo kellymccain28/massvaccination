@@ -11,7 +11,7 @@ source('02_code/packages_data.R')
 year <- 365
 
 # population
-population <- 100000 # increased from 50,000 c(1000,50000,100000)
+population <- 100000 # increased from 50,000 
 
 # run time
 warmup <- 15 * year       # 
@@ -19,8 +19,11 @@ sim_length <- 21 * year   # value > 0
 
 # number of parameter draws
 # 0 = use mean values, 1 to 50 = draws
-drawID <- c(0, 942,  40, 541, 497, 877, 697, 400, 450, 806, 600, 670, 363, 838, 478, 403, 375, 335, 598, 142, 919, 444, 986, 659,  71, 457,
-            891, 188, 432, 975, 488, 867, 538, 912, 534, 215, 540, 866, 613, 973, 917, 937, 931, 296, 835, 328, 147, 701, 889, 708, 888)# c(0, sample(1:1000, 50))#c(0, 1:50)
+drawID <- c(0, 942,  40, 541, 497, 877, 697, 400, 450, 806, 
+            600, 670, 363, 838, 478, 403, 375, 335, 598, 142,
+            919, 444, 986, 659,  71, 457, 891, 188, 432, 975, 
+            488, 867, 538, 912, 534, 215, 540, 866, 613, 973, 
+            917, 937, 931, 296, 835, 328, 147, 701, 889, 708, 888)# c(0, sample(1:1000, 50))#c(0, 1:50)
 
 # SITE set-up ----
 # parasite prevalence 2-10 year olds
@@ -117,9 +120,11 @@ combo <- combo |>
   filter(!(MDAcov > 0 & MDAtiming == 'none')) |> # can't have coverage of MDA and no timing of MDA
   filter(!(MDAcov == 0 & MDAtiming == 'during')) |> # can't have coverage of MDA at 0% and MDA during vax
   filter(!(seas_name == 'seasonal' & RTSS == 'mass+EPI')) |> # no non-seasonal mass vaccination in seasonal areas
-  filter(!(booster_rep == 'annual' & RTSS %in% c('hybrid', 'EPI'))) |> # no annual boosters for EPi and hybrid vaccination
-  filter(!(booster_rep %in% c('annual', '6mo', '2yrs') & RTSSrounds == 'every 3 years')) # for now, there cannot be a repeated 
+  filter(!(booster_rep == 'annual' & RTSS %in% c('hybrid', 'EPI','none'))) |> # no annual boosters for EPI and hybrid vaccination or when no vax
+  filter(!(booster_rep %in% c('annual', '6mo', '2yrs') & RTSSrounds == 'every 3 years')) |># for now, there cannot be a repeated mass campaign
+  filter(!(booster_rep == 'annual' & RTSScov == 0)) # no annual boosters when no vaccination 
 
+  
 # put variables into the same order as function arguments
 combo <- combo |> 
   select(population,        # simulation population
@@ -146,14 +151,14 @@ combo <- combo |>
          MDAtiming,         # timing of MDA round
          ID,                # name of output file
          drawID             # parameter draw no.
-  ) |> as.data.frame()
-
-# rearrange so new ones are at the end 
-# new <- combo |>
-#   filter(RTSSrounds!='every 3 years' & booster_rep == 'annual')
-# combo <- combo |>
-#   filter(!(RTSSrounds!='every 3 years' & booster_rep == 'annual')) |>
-#   rbind(new)
+  ) |> as.data.frame()#|>
+  # filter(RTSSrounds!='every 3 years')
+# # rearrange so new ones are at the end 
+new <- combo |>
+  filter(RTSSrounds!='every 3 years' & booster_rep == 'annual')
+combo <- combo |>
+  filter(!(RTSSrounds!='every 3 years' & booster_rep == 'annual')) |>
+  rbind(new)
 
 
 saveRDS(combo, paste0(path, '03_output/scenarios_torun.rds'))
@@ -197,7 +202,7 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 # Run tasks -------------------------------------------------------------------------------------------------------------
 x = c(1:nrow(combo)) # runs
 # x <- which(combo$MDAcov>0 ) # to get only indices where there is MDA because we only need to rerun those
-# x <- 9792:nrow(combo) # just the new ones (with annual boosters and 0.01)
+# x <- 11049:(nrow(combo)) # just the new ones (with annual boosters and 0.01)
 # define all combinations of scenarios and draws
 index <- tibble(x = x)
 
@@ -209,12 +214,12 @@ index <- index |>
   select(-f, -exist)
 
 # run a test with the first scenario
-t <- obj$enqueue_bulk(13900, runsim) #936-svmass+hybrid #545
+t <- obj$enqueue_bulk(4020, runsim) #936-svmass+hybrid #545
 t$status()
 # t$wait(1000)
 #t$results()
 
-# submit jobs, 10 as a time
+# submit jobs, 100 as a time
 sjob <- function(x, y){
   
   t <- obj$enqueue_bulk(index[x:y,], runsim)
@@ -225,7 +230,7 @@ sjob <- function(x, y){
 map2_dfr(seq(0, nrow(index)- 100, 100),
          seq(99, nrow(index), 100),
          sjob)
-
+# map2_dfr(3998, 4080, sjob)
 # submit all remaining tasks
 t <- obj$enqueue_bulk(index, runsim)
 # t$status()

@@ -5,7 +5,7 @@
 #' output:
 #' 
 
-df <- readRDS(paste0(HPCpath,'HPC_5355/HPC_summbyyr/outcomes_byyear_1_105.rds'))
+df <- readRDS(paste0(HPCpath,'HPC_massvax3years_MDA/HPC_summbyyr/outcomes_byyear_1_210.rds'))
 
 d <- df %>%
   group_by(int_ID) %>%
@@ -20,8 +20,8 @@ d <- df %>%
 
 # table showing the time to rebound 
 d %>% ungroup() %>%
-  filter(!is.na(x_int)) %>%
-  select(pfpr, RTSS, RTSSage, RTSSrounds, time_to_threshold = x_int) %>%
+  filter(!is.na(x_int) & year < 11) %>%
+  select(pfpr, RTSS, RTSSage, RTSSrounds, MDAtiming, time_to_threshold = x_int) %>%
   flextable() 
   
 

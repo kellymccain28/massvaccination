@@ -15,9 +15,9 @@ outcomes_averted <- function(df, byyear = FALSE){
     
     joinvars <- c('ID', 'drawID', 'age_grp')
     
-    baseline_vars <- c(file, ID, scenario, drawID, age_grp, daly_baseline, cases_baseline,
-                       severe_baseline, deaths_baseline, u5_dalys_baseline,
-                       u5_cases_baseline, u5_severe_baseline, dose3)
+    baseline_vars <- c('file', 'ID', 'scenario', 'drawID', 'age_grp', 'daly_baseline', 'cases_baseline',
+                       'severe_baseline', 'deaths_baseline', 'u5_dalys_baseline',
+                       'u5_cases_baseline', 'u5_severe_baseline', 'dose3')
   } else if(byyear == TRUE){
     df <- df |> 
       ungroup()|>
@@ -49,7 +49,7 @@ outcomes_averted <- function(df, byyear = FALSE){
   # separate out baseline scenarios
   none <- output |>
     ungroup() |>
-    filter(RTSS == 'none') |>
+    filter(RTSS == 'none'& booster_rep !='annual') |># 
     rename(daly_baseline = daly,
            cases_baseline = cases,
            severe_baseline = sev_cases,
@@ -65,7 +65,7 @@ outcomes_averted <- function(df, byyear = FALSE){
   base_IDs <- unique(none$file)
   
   averted <- output |> filter(!(file %in% base_IDs)) |>
-    left_join(none |> select(-file, -scenario, -dose3), by = joinvars) |>
+    left_join(none |> select(-file, -scenario, -dose3), by = joinvars) |> 
     
     # calculate outcomes averted
     mutate(dalys_averted = daly_baseline - daly,

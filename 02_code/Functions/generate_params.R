@@ -53,12 +53,16 @@ generate_params <- function(inputpath,   # path to input scenarios
     
     # outcome definitions ----------
     # Set clinical incidence rendering 
-    params$clinical_incidence_rendering_min_ages = c(c(0, 0.25, seq(1, 20, by = 1))*year, seq(0, 95, by = 5)*year, 0)
-    params$clinical_incidence_rendering_max_ages = c(c(0.25, seq(1, 21, by = 1))*year, seq(5, 100, by = 5)*year, 100*year) 
+    params$clinical_incidence_rendering_min_ages = c(c(0, 0.25, seq(1, 20, by = 1))*year, seq(0, 95, by = 5)*year, 0, 5*year, 5*year)
+    params$clinical_incidence_rendering_max_ages = c(c(0.25, seq(1, 21, by = 1))*year, seq(5, 100, by = 5)*year, 100*year, 15*year, 100*year) 
     
     # Set severe incidence rendering 
-    params$severe_incidence_rendering_min_ages = c(c(0, 0.25, seq(1, 20, by = 1))*year, seq(0, 95, by = 5)*year, 0) 
-    params$severe_incidence_rendering_max_ages = c(c(0.25, seq(1, 21, by = 1))*year, seq(5, 100, by = 5)*year, 100*year) 
+    params$severe_incidence_rendering_min_ages = c(c(0, 0.25, seq(1, 20, by = 1))*year, seq(0, 95, by = 5)*year, 0, 5*year, 5*year) 
+    params$severe_incidence_rendering_max_ages = c(c(0.25, seq(1, 21, by = 1))*year, seq(5, 100, by = 5)*year, 100*year, 15*year, 100*year) 
+    
+    # Set age group rendering 
+    params$age_group_rendering_min_ages = c(c(0, 0.25, seq(1, 20, by = 1))*year, seq(0, 95, by = 5)*year, 0, 5*year, 5*year) 
+    params$age_group_rendering_max_ages = c(c(0.25, seq(1, 21, by = 1))*year, seq(5, 100, by = 5)*year, 100*year, 15*year, 100*year) 
     
     # prevalence 2-10 year olds
     params$prevalence_rendering_min_ages = c(2 * year, 0 * year)
@@ -327,18 +331,18 @@ generate_params <- function(inputpath,   # path to input scenarios
           } else if (booster_rep == 'fifth'){ # fifth dose
             round(c(1 * year + 2 * month, 2 * year + 2 * month))
           } else if (booster_rep == 'annual'){ # annual doses 
-            round(c(1 * year + 2 * month, seq(2 * year + 2 * month, (sim_length / year) * year + 2 * month, by = year)))
+            round(c(1 * year + 2 * month, seq(2 * year + 2 * month, 6 * year + 2 * month, by = year))) # limit to 6 boosters instead of all sim (sim_length / year) 
           } else if (booster_rep == '2yr'){ # doses every 2 years
-            round(c(1 * year + 2 * month, seq(2 * year + 2 * month, (sim_length / year) * year + 2 * month, by = 2 * year)))
+            round(c(1 * year + 2 * month, seq(2 * year + 2 * month, 6 * year + 2 * month, by = 2 * year))) #(sim_length / year) 
           }
         boost_cov <- c(RTSScov * 0.8, rep(RTSScov*0.8*0.9, length(massboosters)-1)) # coverage from 10.1016/S2214-109X(22)00416-8
         # if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) 
         
         if(RTSS == 'SVmass+EPI' | RTSS == "mass+EPI"){
           # First set the EPI strategy 
-          EPIboosters <- if(fifth == 0) round(c(12 * month)) else round(c(12 * month, 24 * month)) # from phase III R21 trial
+          EPIboosters <- if(fifth == 0) round(c(12 * month)) else if (fifth == 1) round(c(12 * month, 24 * month)) # from phase III R21 trial
           pevtimesteps <- warmup + program_start # starting when warmup ends
-          EPIboost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) 
+          EPIboost_cov <- if(fifth == 0) RTSScov * 0.8 else if (fifth == 1) c(RTSScov*0.8, RTSScov*0.8*0.9) 
           
           params <- set_pev_epi(
             parameters = params,
@@ -353,7 +357,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             seasonal_boosters = FALSE)
         } else if (RTSS == 'SVmass+hybrid'){
           # Set the hybrid strategy
-          hybridboosters <- if(fifth == 0) round(c(peak - 0.5 * month), 0) else round(((peak - 0.5 * month) + c(0, year)), 0)
+          hybridboosters <- if(fifth == 0) round(c(peak - 3.5 * month), 0) else round(((peak - 3.5 * month) + c(0, year)), 0)
           pevtimesteps <- warmup + program_start # starting when warmup ends
           hybridboost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) 
           
@@ -369,13 +373,14 @@ generate_params <- function(inputpath,   # path to input scenarios
             booster_profile = list(rtss_booster_profile),
             seasonal_boosters = TRUE) 
         }
-      
+        # update booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
+        params$rtss_cs_boost <- c(6.37008, 0.35)
       
         # Get timing for mass vaccination rounds
         if(RTSS == 'SVmass+EPI' | RTSS == 'SVmass+hybrid'){
-          first <- round(warmup + program_start + (peak - month * 3.5), 0) # start a year later
+          first <- round(warmup + program_start + (peak - month * 3.5), 0) # after program start, 3.5 months prior to peak for seasonal (RTSS-CE repo)
         } else if(RTSS == 'mass+EPI'){
-          first <- round(warmup + program_start)
+          first <- round(warmup + program_start + 1) # non seasonally distributed mass campaign
         }
         
         if (RTSSrounds == 'single'){
@@ -386,7 +391,7 @@ generate_params <- function(inputpath,   # path to input scenarios
       
         # Next, set the mass vaccination strategy in addition to routine vaccination
         # if(RTSSage %in% c('young children', 'all children', 'under 5s')){
-        #   min_wait = 3 * year  # I have no idea what the min wait would actually be - if vaccinated around 6 m, then next would be around 3.5-4 yrs old.
+        #   min_wait = 3 * year  
         # } else {
         #   min_wait = 1 * month
         # }
@@ -401,7 +406,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             max_ages = max_ages,
             min_wait = 0,
             booster_timestep = massboosters,
-            booster_coverage = boost_cov,#rep(boost_cov, length(massboosters)),
+            booster_coverage = boost_cov,
             booster_profile = rep(list(rtss_booster_profile), length(massboosters)))
         } else if(RTSSage == 'everyone'){
           proppop_notpregnant <- 1 - 0.078/2 # from DHS data - see Get_pregnancy_rate.R
@@ -417,7 +422,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             min_wait = 0,
             booster_timestep = massboosters, # timesteps following initial vaccination 
             booster_profile = rep(list(rtss_booster_profile), length(massboosters)),
-            booster_coverage = boost_cov#rep(boost_cov, length(massboosters)) # prop of vaccinated pop who will receive booster vaccine
+            booster_coverage = boost_cov # prop of vaccinated pop who will receive booster vaccine
           )
         }
         
@@ -430,13 +435,12 @@ generate_params <- function(inputpath,   # path to input scenarios
       
       # hybrid ----------
       if (RTSS == "hybrid") {
-        params$pev_doses <- round(c(0, 1 * month, 2 * month)) # spacing from phase iii trial R21
+        params$pev_doses <- round(c(0, 1 * month, 2 * month)) # spacing from phase iii trial RTSS and R21
         
         peak <- peak_season_offset(params)
-        first <- round(warmup + program_start + (peak - month * 3.5), 0)
-        boosters <- if(fifth == 0) round(c(first - warmup + 3 * month), 0) else round(((first - warmup + 3 * month) + c(0, year)), 0)
+        boosters <- if(fifth == 0) round(c(peak - 3.5 * month), 0) else round(((peak - 3.5 * month) + c(0, year)), 0)
         boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
-        pevtimesteps <- warmup + program_start # starting when warmup ends
+        pevtimesteps <- warmup + program_start # starting 1 year after warmup ends
         
         params <- set_pev_epi(
           parameters = params,
@@ -450,6 +454,9 @@ generate_params <- function(inputpath,   # path to input scenarios
           booster_profile = list(rtss_booster_profile),
           seasonal_boosters = TRUE
         ) 
+        
+        # update booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
+        params$rtss_cs_boost <- c(6.37008, 0.35)
       }
       
       if (RTSS == 'SV'){ # only to children 5-17 months of age

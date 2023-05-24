@@ -360,7 +360,6 @@ severeavper1000 <- plot_total_averted(df, outcome = "severe_avertedper1000vax", 
 ## Run the summarize function to get annual prevalence
 scenarios <- readRDS(paste0(HPCpath,'03_output/parameters_torun.rds'))
 index <- c(1:nrow(scenarios)) # runs
-# index <- c(10648:nrow(scenarios))
 # source(paste0(HPCpath, '02_code/')
 
 # run a test with the first scenario
@@ -381,7 +380,7 @@ map2_dfr(seq(0, length(index)- 100, 100),
 # index <- 5300:5355# 1800:1836
 obj$enqueue_bulk(index, process_runs_byyr)
 # index <- 10000:10710
-# map_dfr(index, process_runs_byyr)
+map_dfr(index, process_runs_byyr)
 
 
 # Get 95% CrI for prevalence by year ----------------------------------------------
@@ -415,24 +414,28 @@ source(paste0(path, '02_code/Figures.R'))
 output <- readRDS(paste0(HPCpath,'HPC_summbyyr/outcomes_byyear_1_',length(index),'.rds'))
 prev <- unique(output$pfpr)
 
-lapply(prev, outcome = 'prev_byyear', plot_annual_outcome)
+lapply(prev, seas_type = 'perennial', outcome = 'prev_byyear', plot_annual_outcome)
+lapply(prev, seas_type = 'seasonal', outcome = 'prev_byyear', plot_annual_outcome)
 
 # Plotting clinical incidence 0-5 ---------------------------------------------
-lapply(prev, outcome = 'inc_0_1825', plot_annual_outcome)
+lapply(prev, seas_type = 'perennial', outcome = 'inc_0_1825', plot_annual_outcome)
+lapply(prev, seas_type = 'seasonal', outcome = 'inc_0_1825', plot_annual_outcome)
 
 # Plotting incidence among people 5-100 years ---------------------------------
-lapply(prev, outcome = 'inc_1825_365000', plot_annual_outcome)
+lapply(prev, seas_type = 'perennial', outcome = 'inc_1825_365000', plot_annual_outcome)
+lapply(prev, seas_type = 'seasonal', outcome = 'inc_1825_365000', plot_annual_outcome)
 
 # Plotting severe incidence among people 5-100 years  ---------------------------------
-lapply(prev, outcome = 'sev_1825_365000', plot_annual_outcome)
+lapply(prev, seas_type = 'perennial', outcome = 'sev_1825_365000', plot_annual_outcome)
+lapply(prev, seas_type = 'seasonal', outcome = 'sev_1825_365000', plot_annual_outcome)
 
 # Plotting incidence among people 5-15 years ---------------------------------
-lapply(prev, outcome = 'inc_1825_5475', plot_annual_outcome)
+lapply(prev, seas_type = 'perennial', outcome = 'inc_1825_5475', plot_annual_outcome)
+lapply(prev, seas_type = 'seasonal', outcome = 'inc_1825_5475', plot_annual_outcome)
 
 # Plotting severe incidence among people 5-15 years  ---------------------------------
-lapply(prev, outcome = 'sev_1825_5475', plot_annual_outcome)
-
-
+lapply(prev, seas_type = 'perennial', outcome = 'sev_1825_5475', plot_annual_outcome)
+lapply(prev, seas_type = 'seasonal', outcome = 'sev_1825_5475', plot_annual_outcome)
 
 
 ####################################################################################################################################################
@@ -483,7 +486,7 @@ plot_doses(df, seas = 'perennial', prevalence = 0.03)
 ## Run the summarize function to get annual prevalence
 scenarios <- readRDS(paste0(HPCpath,'03_output/parameters_torun.rds'))
 index <- c(1:nrow(scenarios)) # runs
-index <- 4074:nrow(scenarios)
+# index <- 4074:nrow(scenarios)
 #######################
 ########################## **** need to replace rtss with pev in function***********
 #######################
@@ -527,27 +530,26 @@ files <- list.files(path = paste0(HPCpath, "HPC_summbyyrbyage/"), pattern = "run
 dat_list <- lapply(files, function (y) readRDS(y))
 
 # Bind the files together and add group ID for intervention scenario
-out_averted_all <- bind_rows(dat_list) |>
+out_all <- bind_rows(dat_list) |>
   group_by(int_ID, year, age_grp) |> 
-  mutate(group = cur_group_id()) |> ungroup()#, fill = TRUE, idcol = "identifier")
+  mutate(group = cur_group_id()) |> ungroup() #, fill = TRUE, idcol = "identifier")
 
 # save output
-saveRDS(out_averted_all, paste0(HPCpath, "03_output/output_byyear_byage_draws.rds"))
+saveRDS(out_all, paste0(HPCpath, "HPC_summbyyrbyage/output_byyear_byage_draws.rds"))
 
 # Calculate outcomes averted ----------------------------------------------
-
 source(paste0(path, "02_code/Functions/outcomes_averted.R"))
-out_averted_all <- readRDS(paste0(HPCpath, "03_output/output_byyear_byage_draws.rds"))
-output <- out_averted_all %>% 
-  filter(drawID ==0) %>% 
+out_all <- readRDS(paste0(HPCpath, "HPC_summbyyrbyage/output_byyear_byage_draws.rds"))
+output <- out_all %>% 
+  filter(drawID == 0) %>% 
   outcomes_averted(byyear = TRUE)
 
 # save output with outcomes averted both on local machine and on shared drive
 saveRDS(output, paste0(path, "03_output/output_byyear_byage_median.rds"))
-saveRDS(output, paste0(HPCpath, "03_output/output_byyear_byage_median.rds"))
+saveRDS(output, paste0(HPCpath, "HPC_summbyyrbyage/output_byyear_byage_median.rds"))
 
 # get credible intervals 
-output <- readRDS(paste0(HPCpath, "03_output/output_byyear_byage_median.rds"))
+output <- readRDS(paste0(HPCpath, "HPC_summbyyrbyage/output_byyear_byage_median.rds"))
 # index <- 1:max(out$group)
 # output_cr <- map_dfr(index, get_age_yr_cr) # this will take 24 hours... 
 
@@ -568,19 +570,20 @@ plot1 <- ggplot(output %>% filter(seasonality == 'seasonal' & pfpr == 0.25 &
                            RTSSrounds == 'single' &
                            # MDAcov == 0.8 & 
                            age_grp %in% c('0-5','5-10','10-15','15-20','20-25') &
-                           RTSS != 'SV' & year < 10)) +
+                           RTSS != 'SV' & year < 12 & year > 1) %>%
+                  mutate(year = year - 1)) +
   # geom_col(aes(x = age_grp, y = cases_averted, group = as.factor(year), fill = as.factor(year)), 
   #           position = 'dodge') + 
   geom_col(aes(x = age_grp, y = cases_averted, group = as.factor(year), fill = as.factor(year)), position = 'dodge') +
   facet_wrap(~RTSS + RTSSage + MDAcov) +
   # scale_fill_manual(values = lab_col) +
   labs(y = 'Cases Averted',
-       x = "Year",
+       x = "Age group",
        # title = labtitle,
        fill = 'Year') +
   theme_bw()
 
-plot2 <- ggplot(output %>% filter(seasonality == 'seasonal' & pfpr == 0.65 & 
+plot2 <- ggplot(output %>% filter(seasonality == 'perennial' & pfpr == 0.65 & 
                            RTSSrounds == 'single' &
                            # MDAcov == 0.8 & 
                            age_grp %in% c('0-5','5-10','10-15','15-20','20-25') &
