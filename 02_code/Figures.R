@@ -52,11 +52,13 @@ plot_annual_outcome <- function(prev, seas_type, outcome){
     out_label <- 'PfPR 2-10'
   } else if(outcome == 'inc_0_1825'){
     out_label <- 'Incidence per 1000 people aged 0-5y'
-  } else if(outcome == 'inc_0_91.25'){
+  } else if(outcome == 'sev_0_1825'){
+    out_label <- 'Severe incidence per 1000 people aged 0-5y'
+  }else if(outcome == 'inc_0_91.25'){
     out_label <- 'Incidence per 1000 people aged 0-4 m'
-  } else if(outcome == 'inc_1825_365000'){
+  } else if(outcome == 'inc_1825_36500'){
     out_label <- 'Incidence per 1000 people aged 5-100y'
-  } else if(outcome == 'sev_1825_365000'){
+  } else if(outcome == 'sev_1825_36500'){
     out_label <- 'Severe incidence per 1000 people aged 5-100y'
   } else if(outcome == 'inc_1825_5475'){
     out_label <- 'Incidence per 1000 people aged 5-15y'
@@ -64,10 +66,10 @@ plot_annual_outcome <- function(prev, seas_type, outcome){
     out_label <- 'Severe incidence per 1000 people aged 5-15y'
   }
 
-  df_plot <- output %>% filter(pfpr == prev) %>% filter(year < 13) %>% 
+  df_plot <- output %>% filter(pfpr == prev) %>% filter(year < 18) %>% 
     filter(RTSS != 'SV') %>%
     filter(seasonality == seas_type) %>%
-    mutate(facet_lab = paste0(RTSS,"_", RTSSage,"_", RTSSrounds,"_", MDAtiming),
+    mutate(facet_lab = paste0(RTSS,"_", RTSSage,"_", booster_rep,"_", MDAtiming),
            year = year - 2) # so that year0 is = program start akka 1 year
   
   plt <- ggplot(df_plot) + 
@@ -106,7 +108,7 @@ plot_out_averted <- function(outcome, prev, seas, rtss){
     } else if(outcome == 'severe_avertedper1000vax'){
       out_label <- 'Severe cases averted per \n1000 fully vaccinated people'
     } 
-    output$int_ID_lab <- paste0(output$RTSS, " to ", output$RTSSage, ', ', output$RTSSrounds, '; ', output$MDAtiming)#str_sub(output$int_ID, 6, -3)
+    output$int_ID_lab <- paste0(output$RTSS, " to ", output$RTSSage, ', ', output$booster_rep, '; ', output$MDAtiming)#str_sub(output$int_ID, 6, -3)
   
     plt <- ggplot(output %>% filter(pfpr == prev) %>% filter(seasonality == seas) %>% filter(grepl(rtss, RTSS))) +
       geom_col(aes(x = age_grp, y = .data[[paste0(outcome, "_median")]], group = int_ID_lab, fill = int_ID_lab), 
@@ -141,7 +143,8 @@ plot_total_averted <- function(df, outcome, total = TRUE, labtitle){
   # first need to group the dataset by int_ID
   df2 <- df %>%
     select(!starts_with("u5")) %>%
-    dplyr::mutate(int_ID = paste(RTSS, RTSScov, RTSSage, RTSSrounds, fifth, sep = '_')) 
+    dplyr::mutate(int_ID = paste(RTSS, RTSScov, RTSSage, RTSSrounds, MDAcov, sep = '_')) %>%
+    filter(RTSS !="none")
   
   if (total == TRUE){
     df2 <- df2 %>%
@@ -151,6 +154,7 @@ plot_total_averted <- function(df, outcome, total = TRUE, labtitle){
       distinct() %>% ungroup()
     
     ylab <- 'Total outcomes averted'
+    lab <- 'total'
   } else if (total == FALSE) { # mean annual outcomes averted
     df2 <- df2 %>%
       group_by(int_ID, seasonality, pfpr) %>%
@@ -159,6 +163,7 @@ plot_total_averted <- function(df, outcome, total = TRUE, labtitle){
       distinct() %>% ungroup()
     
     ylab <- 'Mean annual outcomes averted'
+    lab <- 'annual_mean'
   }
   
   plt <- ggplot(df2) +
@@ -173,7 +178,9 @@ plot_total_averted <- function(df, outcome, total = TRUE, labtitle){
          title = labtitle,
          fill = 'Intervention ID') +
     theme_bw()
-  plt
+  
+  ggsave(paste0(path, '03_output/Figures/', lab, outcome, 'averted.png'), width = 15, height = 10, units = 'in')
+  return(plt)
 }
 
 plot_cases_averted_by_age <- function(df){
@@ -197,24 +204,30 @@ plot_all_runs <- function(){
   #' input: dataset with all draws combined together 
   #' process: plot the overall prevalence over time per scenario grouped by drawID
   #' output: plot with all 51 runs on same plot to visualize the number of runs that resulted in elimination  
-  df <- readRDS(paste0(HPCpath, "03_output/output_byyear_byage_draws.rds"))
+  df <- readRDS(paste0(HPCpath, "HPC_summbyyrbyage/output_byyear_byage_draws.rds"))
   
-  ggplot(df %>% filter(int_ID == "0.03_seasonal_mass+EPI_0.8_everyone_every 3 years_0_0.8_during")) + 
-    geom_line(aes(x = year, y = n_detect_730_3650, group = as.factor(drawID), color = as.factor(drawID))) +
+  ggplot(df %>% filter(int_ID == "0.01_perennial_EPI_0.8_young children_none_0_0_0_none")) + 
+    geom_line(aes(x = year, y = n_detect_0_36500/100000 * 1000, group = as.factor(drawID), color = as.factor(drawID))) +
     theme_bw() +
     theme(legend.position = 'none') 
   
-  ggplot(d <- df %>% filter(int_ID == "0.03_perennial_mass+EPI_0.8_everyone_single_0_0_none")) + 
-    geom_line(aes(x = year, y = n_infections, group = as.factor(drawID), color = as.factor(drawID))) +
+  ggplot(d <- df %>% filter(int_ID == "0.01_perennial_mass+EPI_0.8_school-aged_single_0_0_0_none")) + 
+    geom_line(aes(x = year, y = n_detect_0_36500/100000 * 1000, group = as.factor(drawID), color = as.factor(drawID))) +
     theme_bw() +
     theme(legend.position = 'none') 
   
-  ggplot(d <- df %>% filter(int_ID == "0.03_perennial_EPI_0.8_young children_none_0_0.8_during")) + 
-    geom_line(aes(x = year, y = n_infections, group = drawID))
-  
-  ggplot(d <- df %>% filter(int_ID == "0.03_perennial_mass+EPI_0.8_everyone_every 3 years_0_0.8_during")) + 
-    geom_line(aes(x = year, y = n_infections, group = drawID))
-  
-  ggplot(d <- df %>% filter(int_ID == "0.03_perennial_mass+EPI_0.8_school-aged_every 3 years_0_0_none")) + 
-    geom_line(aes(x = year, y = n_infections, group = drawID))
+  ggplot(d <- df %>% filter(int_ID == "0.01_perennial_mass+EPI_0.8_everyone_single_0_annual_0_none")) + 
+    geom_line(aes(x = year, y = n_detect_0_36500/100000 * 1000, group = as.factor(drawID), color = as.factor(drawID))) +
+    theme_bw() +
+    theme(legend.position = 'none') 
+  ggplot(d <- df %>% filter(int_ID == "0.03_seasonal_SVmass+EPI_0.8_everyone_single_0_annual_0_none")) + 
+    geom_line(aes(x = year, y = n_detect_0_36500/100000 * 1000, group = as.factor(drawID), color = as.factor(drawID))) +
+    theme_bw() +
+    theme(legend.position = 'none') +
+    scale_y_continuous(breaks = seq(0, 40, by = 0.5))
+  ggplot(d <- df %>% filter(int_ID == "0.01_seasonal_SVmass+EPI_0.8_everyone_single_0_annual_0.8_during")) + 
+    geom_line(aes(x = year, y = n_detect_0_36500/100000 * 1000, group = as.factor(drawID), color = as.factor(drawID))) +
+    theme_bw() +
+    theme(legend.position = 'none') +
+    scale_y_continuous(breaks = seq(0, 16, by = 0.5))
 }

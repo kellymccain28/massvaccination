@@ -38,7 +38,6 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 ###############################################################################################
 scenarios <- readRDS(paste0(HPCpath,'03_output/parameters_torun.rds'))
 index <- c(1:nrow(scenarios)) # runs
-index <- index[which(index$x > 9830),]
 # Process model runs by 1 year age group  ---------------------------------
 
 # Create function to aggregate the raw model runs over the whole simulation by ***1 year*** age group (HPC_summ()), add 
@@ -62,6 +61,7 @@ map_dfr(index, process_summ_runs)
 # Create function to aggregate the raw model runs over the whole simulation by ***5 year*** age group (HPC_summ_5y()), add 
 # mortality rate variables, uncertainty for outcomes, and DALY components, and save it
 process_summ_runs_5y <- function(x){
+  start <- Sys.time()
   clean_summ <- HPC_summ_5y(x) |>
     mortality_rate() |>
     outcome_uncertainty() |>
@@ -69,6 +69,8 @@ process_summ_runs_5y <- function(x){
   
   print(paste0('Saving run ', x))
   saveRDS(clean_summ, paste0(HPCpath,'HPC_summarized_5y/run_summ_', x, '_', clean_summ$int_ID[1], '.rds'))
+  end <- Sys.time()
+  print(end-start)
 }
 # index <- index[which(index >9830),]
 map_dfr(index, process_summ_runs_5y)
@@ -112,19 +114,20 @@ saveRDS(output_5y, paste0(HPCpath, "scenarios_draws_5y.rds"))
 # for incidence, severe incidence, incidence per 1000 doses, dalys, deaths
 df <- readRDS(paste0(HPCpath, "scenarios_draws.rds"))
 df_5y <- readRDS(paste0(HPCpath, "scenarios_draws_5y.rds"))
-index <- seq(1, max(df$group), 1)
+index <- seq(1, max(df_5y$group), 1)
 
 output <- map_dfr(index, get_cr_int, df)
 output_5y <- map_dfr(index, get_cr_int, df_5y)
 
 saveRDS(output, paste0(HPCpath,'./HPC_summarized/aggregatedoversim_1_',length(index),'.rds'))
-saveRDS(output_5y, paste0(HPCpath,'./HPC_summarized/aggregatedoversim_1_',length(index),'_5y.rds'))
+saveRDS(output_5y, paste0(HPCpath,'./HPC_summarized_5y/aggregatedoversim_1_',length(index),'_5y.rds'))
 
 
 # Prep to plot outcomes averted ---------------------------------------------------
 source(paste0(path, '02_code/Figures.R'))
 output <- readRDS(paste0(HPCpath,'/HPC_summarized/aggregatedoversim_1_',length(index),'.rds'))
-# output <- readRDS(paste0(HPCpath,'/HPC_summarized/aggregatedoversim_1_',length(index),'_5y.rds'))
+output <- readRDS(paste0(HPCpath,'/HPC_summarized_5y/aggregatedoversim_1_',length(index),'_5y.rds')) %>%
+  filter(age_grp %in% c('0-5','5-10','10-15','15-20','20-25'))
 prev <- unique(output$pfpr)
 
 # write function to save plots 
@@ -239,24 +242,24 @@ agg_out <- agg |>
   bold(i = 1, bold = TRUE, part = "header")  |>   # adjust bold face of header
   border_remove() |>
   theme_booktabs() |>
-  vline(j = c(7, 11), border = border_style) |>
+  vline(j = c(8, 12), border = border_style) |>
   hline(i = c(10, 40, 50, 80, 90, 120, 130, 140, 170), border = border_style) |>
   # highlight max values for max cases averted
-  bg(j = 8, i = maxcases, part = "body", bg = "#91c293") |>
+  bg(j = 9, i = maxcases, part = "body", bg = "#91c293") |>
   # highl8ight values for max severe cases averted
-  bg(j = 9, i = maxsev, part = "body", bg = "#91c293") |>
+  bg(j = 10, i = maxsev, part = "body", bg = "#91c293") |>
   # highlight values for max dalys averted
-  bg(j = 10, i = maxdaly, part = "body", bg = "#91c293") |>
+  bg(j = 11, i = maxdaly, part = "body", bg = "#91c293") |>
   # highlight values for max deaths averted
-  bg(j = 11, i = maxdeath, part = "body", bg = "#91c293") |>
+  bg(j = 12, i = maxdeath, part = "body", bg = "#91c293") |>
   # highlight max values for max cases averted per 1000 vaccinated
-  bg(j = 12, i = maxcases1000, part = "body", bg = "#91c293") |>
+  bg(j = 13, i = maxcases1000, part = "body", bg = "#91c293") |>
   # highlight values for max severe cases averted per 1000 vaccinated
-  bg(j = 13, i = maxsev1000, part = "body", bg = "#91c293") |>
+  bg(j = 14, i = maxsev1000, part = "body", bg = "#91c293") |>
   # highlight values for max dalys averted per 1000 vaccinated
-  bg(j = 14, i = maxdaly1000, part = "body", bg = "#91c293") |>
+  bg(j = 15, i = maxdaly1000, part = "body", bg = "#91c293") |>
   # highlight values for max deaths averted per 1000 vaccinated
-  bg(j = 15, i = maxdeath1000, part = "body", bg = "#91c293") 
+  bg(j = 16, i = maxdeath1000, part = "body", bg = "#91c293") 
   
 agg_out
 
@@ -341,7 +344,8 @@ save_as_image(agg_out, path = paste0(path, "03_output/Figures/table_outcomes_ave
 
 # Plot total outcomes ----
 source(paste0(path, '02_code/Figures.R'))
-df <- readRDS(paste0(HPCpath,'/HPC_summarized/aggregatedoversim_1_',length(index),'.rds'))
+df <- readRDS(paste0(HPCpath,'/HPC_summarized_5y/aggregatedoversim_1_',length(index),'_5y.rds')) %>%
+  filter(age_grp !='0-100')
 
 casesav <- plot_total_averted(df, outcome = "cases_averted", total = TRUE, labtitle = 'Total cases averted')
 deathsav <- plot_total_averted(df, outcome = "deaths_averted", total = TRUE, labtitle = 'Total deaths averted')
@@ -360,26 +364,7 @@ severeavper1000 <- plot_total_averted(df, outcome = "severe_avertedper1000vax", 
 ## Run the summarize function to get annual prevalence
 scenarios <- readRDS(paste0(HPCpath,'03_output/parameters_torun.rds'))
 index <- c(1:nrow(scenarios)) # runs
-# source(paste0(HPCpath, '02_code/')
 
-# run a test with the first scenario
-t <- obj$enqueue_bulk(3219:3220, process_runs_byyr) #936-svmass+hybrid #545
-t$status()
-#t$results()
-
-# submit jobs, 100 as a time
-sjob <- function(x, y){
-  t <- obj$enqueue_bulk(index[x:y], process_runs_byyr)
-  return(1)
-}
-
-map2_dfr(seq(0, length(index)- 100, 100),
-         seq(99, length(index), 100),
-         sjob)
-#Submit last jobs
-# index <- 5300:5355# 1800:1836
-obj$enqueue_bulk(index, process_runs_byyr)
-# index <- 10000:10710
 map_dfr(index, process_runs_byyr)
 
 
@@ -389,8 +374,8 @@ map_dfr(index, process_runs_byyr)
 files <- list.files(path = paste0(HPCpath, "HPC_summbyyr/"), pattern = "run_summ*", full.names = TRUE) 
 files <- data.frame(filenames = files) |>
   mutate(file = filenames) |>
-  tidyr::separate(filenames, into = c('HPC',"run","summ",'draw','pfpr','seas','RTSS','RTSScov','RTSSage','RTSSrounds','fifth', 'MDAcov', 'MDAtiming'), sep="_") %>% #'booster_rep', 
-  group_by(pfpr, seas, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, MDAcov, MDAtiming) |> #'booster_rep', 
+  tidyr::separate(filenames, into = c('HPC',"run","summ",'draw','pfpr','seas','RTSS','RTSScov','RTSSage','RTSSrounds','fifth', 'booster_rep', 'MDAcov', 'MDAtiming'), sep="_") %>% #'booster_rep', 
+  group_by(pfpr, seas, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, booster_rep, MDAcov, MDAtiming) |> #'booster_rep', 
   mutate(group = cur_group_id()) 
 
 index <- seq(1, max(files$group),1)
@@ -421,13 +406,17 @@ lapply(prev, seas_type = 'seasonal', outcome = 'prev_byyear', plot_annual_outcom
 lapply(prev, seas_type = 'perennial', outcome = 'inc_0_1825', plot_annual_outcome)
 lapply(prev, seas_type = 'seasonal', outcome = 'inc_0_1825', plot_annual_outcome)
 
+# Plotting severe incidence 0-5 ---------------------------------------------
+lapply(prev, seas_type = 'perennial', outcome = 'sev_0_1825', plot_annual_outcome)
+lapply(prev, seas_type = 'seasonal', outcome = 'sev_0_1825', plot_annual_outcome)
+
 # Plotting incidence among people 5-100 years ---------------------------------
-lapply(prev, seas_type = 'perennial', outcome = 'inc_1825_365000', plot_annual_outcome)
-lapply(prev, seas_type = 'seasonal', outcome = 'inc_1825_365000', plot_annual_outcome)
+lapply(prev, seas_type = 'perennial', outcome = 'inc_1825_36500', plot_annual_outcome)
+lapply(prev, seas_type = 'seasonal', outcome = 'inc_1825_36500', plot_annual_outcome)
 
 # Plotting severe incidence among people 5-100 years  ---------------------------------
-lapply(prev, seas_type = 'perennial', outcome = 'sev_1825_365000', plot_annual_outcome)
-lapply(prev, seas_type = 'seasonal', outcome = 'sev_1825_365000', plot_annual_outcome)
+lapply(prev, seas_type = 'perennial', outcome = 'sev_1825_36500', plot_annual_outcome)
+lapply(prev, seas_type = 'seasonal', outcome = 'sev_1825_36500', plot_annual_outcome)
 
 # Plotting incidence among people 5-15 years ---------------------------------
 lapply(prev, seas_type = 'perennial', outcome = 'inc_1825_5475', plot_annual_outcome)
@@ -583,7 +572,7 @@ plot1 <- ggplot(output %>% filter(seasonality == 'seasonal' & pfpr == 0.25 &
        fill = 'Year') +
   theme_bw()
 
-plot2 <- ggplot(output %>% filter(seasonality == 'perennial' & pfpr == 0.65 & 
+plot2 <- ggplot(output %>% filter(seasonality == 'seasonal' & pfpr == 0.65 & 
                            RTSSrounds == 'single' &
                            # MDAcov == 0.8 & 
                            age_grp %in% c('0-5','5-10','10-15','15-20','20-25') &

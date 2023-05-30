@@ -122,7 +122,8 @@ combo <- combo |>
   filter(!(seas_name == 'seasonal' & RTSS == 'mass+EPI')) |> # no non-seasonal mass vaccination in seasonal areas
   filter(!(booster_rep == 'annual' & RTSS %in% c('hybrid', 'EPI','none'))) |> # no annual boosters for EPI and hybrid vaccination or when no vax
   filter(!(booster_rep %in% c('annual', '6mo', '2yrs') & RTSSrounds == 'every 3 years')) |># for now, there cannot be a repeated mass campaign
-  filter(!(booster_rep == 'annual' & RTSScov == 0)) # no annual boosters when no vaccination 
+  filter(!(booster_rep == 'annual' & RTSScov == 0)) |> # no annual boosters when no vaccination 
+  filter(!(booster_rep == 'annual' & RTSS == 'none'))
 
   
 # put variables into the same order as function arguments
@@ -154,11 +155,11 @@ combo <- combo |>
   ) |> as.data.frame()#|>
   # filter(RTSSrounds!='every 3 years')
 # # rearrange so new ones are at the end 
-new <- combo |>
-  filter(RTSSrounds!='every 3 years' & booster_rep == 'annual')
-combo <- combo |>
-  filter(!(RTSSrounds!='every 3 years' & booster_rep == 'annual')) |>
-  rbind(new)
+# new <- combo |>
+#   filter(RTSSrounds!='every 3 years' & booster_rep == 'annual')
+# combo <- combo |>
+#   filter(!(RTSSrounds!='every 3 years' & booster_rep == 'annual')) |>
+#   rbind(new)
 
 
 saveRDS(combo, paste0(path, '03_output/scenarios_torun.rds'))
