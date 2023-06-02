@@ -27,7 +27,7 @@ drawID <- c(0, 942,  40, 541, 497, 877, 697, 400, 450, 806,
 
 # SITE set-up ----
 # parasite prevalence 2-10 year olds
-pfpr <- c(0.01, 0.03, 0.05, 0.25, 0.45, 0.65)#c(0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.35, 0.45, 0.55, 0.65) # 
+pfpr <- c(0.01, 0.03, 0.05, 0.25, 0.45, 0.65)
 
 # seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
 # drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
@@ -52,78 +52,99 @@ speciesprop <- data.frame(speciesprop = rbind(list(c(0.25, 0.25, 0.5))),
                           row.names = NULL)
 
 # INTERVENTIONS ----
-# ITN type: pyr, pbo
-ITN <- c('pyr') 
-
-# ITN usage
-ITNuse <- c(0)#0.25, 0.50, 
-
-# boosting ITN use by 10%: 0, 1
-ITNboost <- c(0) 
-
-# insecticide resistance level: 0, 0.4, 0.8
-resistance <- c(0) 
-
-# IRS coverage
-IRS <-  c(0)
 
 # treatment coverage (baseline)
 treatment <- c(0.45) 
 
-# MDAcoverage
-MDAcov <- c(0, 0.8)
+# MDA
+MDAcov <- c(0, 1)
 
 # MDA timing
-MDAtiming <- c('none', 'during') #'prior', , 'after'
+# MDAtiming <- c('none', 'during') 
 
 # SMC: 0, 1
 SMC <- c(0) 
 
 # RTS,S
-RTSS <- c('none', 'SVmass+EPI', 'SVmass+hybrid', 'EPI', 'hybrid', 'mass+EPI') #,'catch-up', 'SV'
+RTSS <- c('none', 'AB', 'hybrid', 'catch-up', 'mass')#SVmass+AB', 'SVmass+hybrid', 'mass+AB') #, 'SV'
 
 # RTS,S coverage
-RTSScov <- c(0, 0.8) 
+# RTSScov <- c(0, 0.8) 
+
+# RTS,S boost in immunogenicity for 4th dose (for AB with booster returning to same leve and for hybrid)
+# RTSSboost <- c(0, 1)
+# don't need to boost here - will do in parameterization 
 
 # RTS,S age group
-RTSSage <- c('none', 'school-aged', 'young children','everyone')#,'all children','under 5s'
+RTSSage <- c('-', '5-15', '5-9', '5-100')#,'5-17m', 
 
 # Rounds of RTSS mass vaccination
-RTSSrounds <- c('none','single','every 3 years')
+RTSSrounds <- c('-','single','3yrs') #, '5yrs'
 
 # Status of fifth RTSS dose- for simplicity, can only be 0 
-fifth <- c(0)
+# fifth <- c(0)
+
+# EPI booster timing 
+EPIbooster <- c('12m', '18m', 'seasonal', '-')
+
+# Extra boosters for EPI 
+EPIextra <- c('5y', '10y', '-')
 
 # adding vaccine boosters: 0 - no fifth dose, fifth (2 booster doses), annual (every year), 6mo (every 6 months), 2yrs (every 2 years)
-booster_rep <- c(0, 'annual')
+# massbooster_rep <- c(0, 'annual')
 
-interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, booster_rep, MDAcov, MDAtiming)
+interventions <- crossing(treatment, SMC, RTSS, RTSSage, RTSSrounds, EPIbooster, EPIextra, MDAcov)
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
-  mutate(ID = paste(pfpr, seas_name, ITNuse, drawID, sep = "_")) 
+  mutate(ID = paste(pfpr, seas_name, drawID, sep = "_")) 
 
 # remove non-applicable scenarios 
 combo <- combo |>
-  filter(!(RTSS=='none' & RTSScov > 0)) |>
-  filter(!(RTSS %in% c('SVmass+EPI','SVmass+hybrid','mass+EPI','EPI','hybrid','catch-up') & RTSScov == 0)) |>
-  filter(!(RTSScov == 0 & RTSSage %in% c('all children','everyone','school-aged','under 5s','young children','over 5s'))) |>
-  filter(!(RTSScov > 0 & RTSSage == 'none')) |>
-  filter(!(RTSS %in% c('EPI','hybrid', 'SV') & RTSSage %in% c('all children', 'everyone','school-aged','under 5s','over 5s','none'))) |> # age and hybrid and SV only given to young children 
-  filter(!(RTSS %in% c('EPI','hybrid', 'SV') & RTSSrounds %in% c('single','every 3 years'))) |> # they don't get mass vaccination rounds
-  filter(!(RTSSage == 'none' & RTSSrounds %in% c('single','every 3 years'))) |>
-  filter(!((RTSS =='none' | RTSS == 'EPI') & fifth == 1)) |>
-  filter(!(seas_name == "perennial" & (RTSS == "SVmass+EPI" |RTSS =='SVmass+hybrid' | RTSS == "hybrid" | RTSS == 'SV'))) |>
-  filter(!((RTSS == 'SVmass+EPI' |RTSS =='SVmass+hybrid'| RTSS =='mass+EPI') & RTSSrounds == 'none')) |>
-  filter(!((RTSS == 'SVmass+EPI'|RTSS =='SVmass+hybrid'|RTSS == 'mass+EPI') & RTSSage %in% c('young children'))) |> # when routine vaccination is to children 5-17 months, wouldn't do mass to them too
-  filter(!((MDAcov > 0 | MDAtiming == 'during') & RTSS == 'none')) |> # only testing MDA combined with RTSS or RTSS alone, not MDA on its own
-  filter(!(MDAcov > 0 & MDAtiming == 'none')) |> # can't have coverage of MDA and no timing of MDA
-  filter(!(MDAcov == 0 & MDAtiming == 'during')) |> # can't have coverage of MDA at 0% and MDA during vax
-  filter(!(seas_name == 'seasonal' & RTSS == 'mass+EPI')) |> # no non-seasonal mass vaccination in seasonal areas
-  filter(!(booster_rep == 'annual' & RTSS %in% c('hybrid', 'EPI','none'))) |> # no annual boosters for EPI and hybrid vaccination or when no vax
-  filter(!(booster_rep %in% c('annual', '6mo', '2yrs') & RTSSrounds == 'every 3 years')) |># for now, there cannot be a repeated mass campaign
-  filter(!(booster_rep == 'annual' & RTSScov == 0)) |> # no annual boosters when no vaccination 
-  filter(!(booster_rep == 'annual' & RTSS == 'none'))
+  filter(!(RTSS == 'none' & EPIbooster %in% c('12m', '18m', 'seasonal'))) |> # If no vaccination, then no EPI boosters
+  filter(!(RTSS %in% c('none', 'mass') & EPIextra %in% c('5y', '10y'))) |> #no extra epi boosters if no vax or if only mass
+  filter(!(RTSS == 'none' & RTSSrounds %in% c('3yrs','single'))) |> # no rounds of RTSs if no vaccination
+  # filter(!(RTSS == 'none' & RTSSboost == 1)) |> # if no vaccine, then no boost in immunity 
+  filter(!(RTSS == 'none' & RTSSage %in% c('5-15', '5-9', '5-100'))) |> # if no vaccine, then age groups are irrelevant
+  filter(!(RTSS %in% c('AB', 'hybrid') & RTSSage %in% c('5-15', '5-9', '5-100'))) |> # with EPI vax, no age groups specified
+  filter(!(RTSS == 'catch-up' & RTSSage %in% c('-', '5-100'))) |> # catch-up vax to only 5-19 or 5-15
+  filter(!(RTSS == 'mass' & RTSSage %in% c('5-15', '5-9', '-'))) |> # mass vax only to 5-100
+  filter(!(RTSS %in% c('AB', 'hybrid', 'catch-up') & RTSSrounds %in% c('single','3yrs', '5yrs'))) |> # AB and hybrid would not have repeated mass rounds 
+  #filter(!(RTSS %in% c('catch-up', 'mass') & RTSSrounds == '-')) |> # need to specify number of mass rounds 
+  filter(!(RTSS == 'AB' & EPIbooster %in% c('seasonal','-'))) |> # no seasonal boosters for AB
+  filter(!(RTSS == 'catch-up' & EPIbooster %in% c('-', '18m','seasonal'))) |> # always has an EPI booster timing of 12 m
+  filter(!(RTSS == 'hybrid' & EPIbooster %in% c('12m', '18m','-'))) |> # hybrid vaccination will not have these boosters
+  filter(!(RTSS == 'mass' & EPIbooster %in% c('12m', '18m','seasonal'))) |> # mass vaccination doesn't have epi boosters
+  filter(!(RTSS %in% c('AB', 'hybrid','mass', 'none') & EPIextra %in% c('5y','10y'))) |> # only catch-up vax gets extra boosters
+  # filter(!(RTSS == 'none' & massbooster_rep == 'annual')) |> # if no vaccine, then no annual mass bosoters 
+  filter(!(seas_name == 'perennial' & RTSS == 'hybrid')) |> # no hybrid vaccination in perennial settings 
+  # filter(!(RTSSboost == 1 & RTSSrounds == '-')) |> # no boost if no rounds of RTSS
+  # filter(!(RTSSboost == 1 & RTSSage == '-')) |> # no boost if no age group 
+  # filter(!(RTSSboost == 1 & ))
+  filter(!(RTSS %in% c('AB', 'hybrid','catch-up') & MDAcov == 1)) # MDA is only to rtss == none and rtss ==mass 
+  
+  
+  # filter(!(RTSS=='none' & RTSScov > 0)) |>
+  # filter(!(RTSS %in% c('mass','mass','mass','AB','hybrid','catch-up') & RTSScov == 0)) |>
+  # filter(!(RTSScov == 0 & RTSSage %in% c('5-9','5-100','5-15'))) |> #,'5-17m'
+  # filter(!(RTSScov > 0 & RTSSage == 'none')) |>
+  # filter(!(RTSS %in% c('AB','hybrid') & RTSSage %in% c('5-9', '5-100','5-15','none'))) |> # age and hybrid and SV only given to young children 
+  # filter(!(RTSS %in% c('AB','hybrid') & RTSSrounds %in% c('single','every 3 years'))) |> # they don't get mass vaccination rounds
+  # filter(!(RTSSage == 'none' & RTSSrounds %in% c('single','every 3 years'))) |>
+  # filter(!((RTSS =='none' | RTSS == 'AB') & fifth == 1)) |>
+  # filter(!(seas_name == "perennial" & (RTSS == "SVmass+AB" |RTSS =='SVmass+hybrid' | RTSS == "hybrid" | RTSS == 'SV'))) |>
+  # filter(!((RTSS == 'SVmass+AB' |RTSS =='SVmass+hybrid'| RTSS =='mass+AB') & RTSSrounds == 'none')) |>
+  # filter(!((RTSS == 'SVmass+AB'|RTSS =='SVmass+hybrid'|RTSS == 'mass+AB') & RTSSage %in% c('5-17m'))) |> # when routine vaccination is to children 5-17 months, wouldn't do mass to them too
+  # filter(!((MDAcov > 0 | MDAtiming == 'during') & RTSS == 'none')) |> # only testing MDA combined with RTSS or RTSS alone, not MDA on its own
+  # filter(!(MDAcov > 0 & MDAtiming == 'none')) |> # can't have coverage of MDA and no timing of MDA
+  # filter(!(MDAcov == 0 & MDAtiming == 'during')) |> # can't have coverage of MDA at 0% and MDA during vax
+  # filter(!(seas_name == 'seasonal' & RTSS == 'mass+AB')) |> # no non-seasonal mass vaccination in seasonal areas
+  # filter(!(booster_rep == 'annual' & RTSS %in% c('hybrid', 'AB','none'))) |> # no annual boosters for AB and hybrid vaccination or when no vax
+  # filter(!(booster_rep %in% c('annual', '6mo', '2yrs') & RTSSrounds == 'every 3 years')) |># for now, there cannot be a repeated mass campaign
+  # filter(!(booster_rep == 'annual' & RTSScov == 0)) |> # no annual boosters when no vaccination 
+  # filter(!(booster_rep == 'annual' & RTSS == 'none')) |> # no annual boosters when no vaccination 
+  # filter(!(RTSSboost == 1 & (RTSS == 'none' | RTSSrounds == 'none' | RTSSage == 'none' | RTSScov == 0)))  # can't have boosted immunogenicity if wasn't vaccinated 
+
 
   
 # put variables into the same order as function arguments
@@ -135,18 +156,13 @@ combo <- combo |>
          warmup,            # warm-up period
          sim_length,        # length of simulation run
          speciesprop,       # proportion of each vector species
-         ITN,               # ITN type
-         ITNuse,            # ITN usage
-         ITNboost,          # if ITN usage is boosted by 10%
-         resistance,        # resistance level
-         IRS,               # IRS coverage
          treatment,         # treatment coverage
          SMC,               # SMC coverage
          RTSS,              # RTS,S strategy
          RTSScov,           # RTS,S coverage
          RTSSage,           # RTS,S age groups
          RTSSrounds,        # RTS,S rounds of mass vax
-         fifth,             # status of 5th dose for EPI or hybrid strategies
+         RTSSboost,         # RTS,S boosted immunogenicity for 4th dose
          booster_rep,       # how many boosters 
          MDAcov,            # MDA coverage
          MDAtiming,         # timing of MDA round

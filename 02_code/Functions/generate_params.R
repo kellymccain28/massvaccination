@@ -282,16 +282,14 @@ generate_params <- function(inputpath,   # path to input scenarios
     if (RTSScov > 0) {
       program_start <- 5 * year
       
-      boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
+      # boost_cov <- if(fifth == 0) RTSScov * 0.8 else c(RTSScov*0.8, RTSScov*0.8*0.9) # coverage from 10.1016/S2214-109X(22)00416-8
+      
       if (RTSSage == 'young children'){
         min_ages = round(5*month)
         max_ages = round(17*month)
-      } else if (RTSSage == 'all children'){
-        min_ages = round(5*month)
-        max_ages = 15*year
-      } else if (RTSSage == 'under 5s'){
-        min_ages = round(5*month)
-        max_ages = 5*year
+      } else if (RTSSage == '5-9'){
+        min_ages = 5*year
+        max_ages = 9*year
       } else if (RTSSage == 'school-aged'){
         min_ages = 5*year
         max_ages = 15*year
