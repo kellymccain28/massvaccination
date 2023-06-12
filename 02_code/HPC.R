@@ -4,7 +4,7 @@
 ### function to create a list of parameters for each scenario and outputs this as a file. 
 ### The function `run_simulation` is run for each scenario in this parameter list.
 
-source('02_code/packages_data.R')
+source(paste0('C:/Users/kem22/OneDrive - Imperial College London/PhD Admin/Mass vaccination/massvaccination/02_code/packages_data.R'))
 
 ## Model set up ------------------------------------------------------------------------------------------------
 # year
@@ -20,7 +20,7 @@ sim_length <- 21 * year   # value > 0
 # number of parameter draws
 # 0 = use mean values, 1 to 50 = draws
 drawID <- c(0, 942,  40, 541, 497, 877, 697, 400, 450, 806, 
-            600, 670, 363, 838, 478, 403, 375, 335, 598, 142,
+            600, 670, 363, 838, 478, 403, 375, 335, 598, 142)#,
             919, 444, 986, 659,  71, 457, 891, 188, 432, 975, 
             488, 867, 538, 912, 534, 215, 540, 866, 613, 973, 
             917, 937, 931, 296, 835, 328, 147, 701, 889, 708, 888)# c(0, sample(1:1000, 50))#c(0, 1:50)
@@ -57,7 +57,7 @@ speciesprop <- data.frame(speciesprop = rbind(list(c(0.25, 0.25, 0.5))),
 treatment <- c(0.45) 
 
 # MDA
-MDAcov <- c(0, 1)
+MDA <- c(0, 1)
 
 # MDA timing
 # MDAtiming <- c('none', 'during') 
@@ -65,63 +65,72 @@ MDAcov <- c(0, 1)
 # SMC: 0, 1
 SMC <- c(0) 
 
-# RTS,S
-RTSS <- c('none', 'AB', 'hybrid', 'catch-up', 'mass')#SVmass+AB', 'SVmass+hybrid', 'mass+AB') #, 'SV'
+# Vaccine 
+PEV <- c('none','RTSS','R21')
 
-# RTS,S coverage
-# RTSScov <- c(0, 0.8) 
+# PEV strategy
+PEVstrategy <- c('none', 'AB', 'hybrid', 'catch-up', 'mass')#SVmass+AB', 'SVmass+hybrid', 'mass+AB') #, 'SV'
+
+# PEV coverage
+PEVcov <- c(0, 0.8)
 
 # RTS,S boost in immunogenicity for 4th dose (for AB with booster returning to same leve and for hybrid)
 # RTSSboost <- c(0, 1)
-# don't need to boost here - will do in parameterization 
 
-# RTS,S age group
-RTSSage <- c('-', '5-15', '5-9', '5-100')#,'5-17m', 
+# PEV age group
+PEVage <- c('-', '5-15', '5-9', '5-100')#,'5-17m', 
 
-# Rounds of RTSS mass vaccination
-RTSSrounds <- c('-','single','3yrs') #, '5yrs'
+# Rounds of PEV mass vaccination
+PEVrounds <- c('-','single','3yrs') #, '5yrs'
 
 # Status of fifth RTSS dose- for simplicity, can only be 0 
 # fifth <- c(0)
 
 # EPI booster timing 
-EPIbooster <- c('12m', '18m', 'seasonal', '-')
+EPIbooster <- c('12m', '12m boost', '18m', 'seasonal', '-')
 
 # Extra boosters for EPI 
 EPIextra <- c('5y', '10y', '-')
 
 # adding vaccine boosters: 0 - no fifth dose, fifth (2 booster doses), annual (every year), 6mo (every 6 months), 2yrs (every 2 years)
-# massbooster_rep <- c(0, 'annual')
+massbooster_rep <- c('-', '4 annual')
 
-interventions <- crossing(treatment, SMC, RTSS, RTSSage, RTSSrounds, EPIbooster, EPIextra, MDAcov)
+interventions <- crossing(treatment, SMC, PEV, PEVstrategy, PEVcov, PEVage, PEVrounds, EPIbooster, EPIextra, massbooster_rep, MDA)
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
-  mutate(ID = paste(pfpr, seas_name, drawID, sep = "_")) 
+  mutate(ID = paste(pfpr, seas_name, "0", drawID, sep = "_")) 
 
 # remove non-applicable scenarios 
 combo <- combo |>
-  filter(!(RTSS == 'none' & EPIbooster %in% c('12m', '18m', 'seasonal'))) |> # If no vaccination, then no EPI boosters
-  filter(!(RTSS %in% c('none', 'mass') & EPIextra %in% c('5y', '10y'))) |> #no extra epi boosters if no vax or if only mass
-  filter(!(RTSS == 'none' & RTSSrounds %in% c('3yrs','single'))) |> # no rounds of RTSs if no vaccination
-  # filter(!(RTSS == 'none' & RTSSboost == 1)) |> # if no vaccine, then no boost in immunity 
-  filter(!(RTSS == 'none' & RTSSage %in% c('5-15', '5-9', '5-100'))) |> # if no vaccine, then age groups are irrelevant
-  filter(!(RTSS %in% c('AB', 'hybrid') & RTSSage %in% c('5-15', '5-9', '5-100'))) |> # with EPI vax, no age groups specified
-  filter(!(RTSS == 'catch-up' & RTSSage %in% c('-', '5-100'))) |> # catch-up vax to only 5-19 or 5-15
-  filter(!(RTSS == 'mass' & RTSSage %in% c('5-15', '5-9', '-'))) |> # mass vax only to 5-100
-  filter(!(RTSS %in% c('AB', 'hybrid', 'catch-up') & RTSSrounds %in% c('single','3yrs', '5yrs'))) |> # AB and hybrid would not have repeated mass rounds 
-  #filter(!(RTSS %in% c('catch-up', 'mass') & RTSSrounds == '-')) |> # need to specify number of mass rounds 
-  filter(!(RTSS == 'AB' & EPIbooster %in% c('seasonal','-'))) |> # no seasonal boosters for AB
-  filter(!(RTSS == 'catch-up' & EPIbooster %in% c('-', '18m','seasonal'))) |> # always has an EPI booster timing of 12 m
-  filter(!(RTSS == 'hybrid' & EPIbooster %in% c('12m', '18m','-'))) |> # hybrid vaccination will not have these boosters
-  filter(!(RTSS == 'mass' & EPIbooster %in% c('12m', '18m','seasonal'))) |> # mass vaccination doesn't have epi boosters
-  filter(!(RTSS %in% c('AB', 'hybrid','mass', 'none') & EPIextra %in% c('5y','10y'))) |> # only catch-up vax gets extra boosters
-  # filter(!(RTSS == 'none' & massbooster_rep == 'annual')) |> # if no vaccine, then no annual mass bosoters 
-  filter(!(seas_name == 'perennial' & RTSS == 'hybrid')) |> # no hybrid vaccination in perennial settings 
-  # filter(!(RTSSboost == 1 & RTSSrounds == '-')) |> # no boost if no rounds of RTSS
-  # filter(!(RTSSboost == 1 & RTSSage == '-')) |> # no boost if no age group 
-  # filter(!(RTSSboost == 1 & ))
-  filter(!(RTSS %in% c('AB', 'hybrid','catch-up') & MDAcov == 1)) # MDA is only to rtss == none and rtss ==mass 
+  filter(!(PEV == 'none' & PEVstrategy %in% c('AB', 'hybrid','catch-up', 'mass'))) |>
+  filter(!(PEV %in% c('R21', 'RTSS') & PEVstrategy == 'none')) |>
+  # filter(!(PEV == 'R21' & EPIbooster %in% c('12m boost', '18m', 'seasonal'))) |> 
+  filter(!(PEVstrategy == 'none' & EPIbooster %in% c('12m', '12m boost', '18m', 'seasonal'))) |> # If no vaccination, then no EPI boosters
+  filter(!(PEVstrategy %in% c('none', 'mass') & EPIextra %in% c('5y', '10y'))) |> #no extra epi boosters if no vax or if only mass
+  filter(!(PEVstrategy == 'none' & PEVrounds %in% c('3yrs','single'))) |> # no rounds of PEVs if no vaccination
+  # filter(!(PEV == 'none' & PEVsboost == 1)) |> # if no vaccine, then no boost in immunity 
+  filter(!(PEVstrategy == 'none' & PEVage %in% c('5-15', '5-9', '5-100'))) |> # if no vaccine, then age groups are irrelevant
+  filter(!(PEVstrategy %in% c('AB', 'hybrid') & PEVage %in% c('5-15', '5-9', '5-100'))) |> # with EPI vax, no age groups specified
+  filter(!(PEVstrategy == 'catch-up' & PEVage %in% c('-', '5-100'))) |> # catch-up vax to only 5-19 or 5-15
+  filter(!(PEVstrategy == 'mass' & PEVage %in% c('5-15', '5-9', '-'))) |> # mass vax only to 5-100
+  filter(!(PEVstrategy %in% c('AB', 'hybrid', 'catch-up') & PEVrounds %in% c('single','3yrs', '5yrs'))) |> # AB and hybrid would not have repeated mass rounds 
+  #filter(!(PEVstrategy %in% c('catch-up', 'mass') & PEVrounds == '-')) |> # need to specify number of mass rounds 
+  filter(!(PEVstrategy == 'AB' & EPIbooster %in% c('seasonal','-'))) |> # no seasonal boosters for AB
+  filter(!(PEVstrategy == 'catch-up' & EPIbooster %in% c('-', '12m', '18m','seasonal'))) |> # always has an EPI booster timing of 12 m boost
+  filter(!(PEVstrategy == 'hybrid' & EPIbooster %in% c('12m', '12m boost', '18m','-'))) |> # hybrid vaccination will not have these boosters
+  filter(!(PEVstrategy == 'mass' & EPIbooster %in% c('12m', '12m boost', '18m','seasonal'))) |> # mass vaccination doesn't have epi boosters
+  filter(!(PEVstrategy %in% c('AB', 'hybrid','mass', 'none') & EPIextra %in% c('5y','10y'))) |> # only catch-up vax gets extra boosters
+  # filter(!(PEVstrategy == 'none' & massbooster_rep == 'annual')) |> # if no vaccine, then no annual mass bosoters 
+  filter(!(seas_name == 'perennial' & PEVstrategy == 'hybrid')) |> # no hybrid vaccination in perennial settings 
+  # filter(!(PEVboost == 1 & PEVrounds == '-')) |> # no boost if no rounds of PEV
+  # filter(!(PEVboost == 1 & PEVage == '-')) |> # no boost if no age group 
+  # filter(!(PEVboost == 1 & ))
+  filter(!(PEVstrategy %in% c('AB', 'hybrid','catch-up') & MDA == 1)) |># MDA is only to PEVstrategy == none and PEVstrategy ==mass 
+  filter(!(PEVstrategy %in% c('AB', 'hybrid','catch-up', 'mass') & PEVcov == 0)) |> # if vaccination, then coverage is not 0
+  filter(!(PEVstrategy == 'none' & PEVcov == 0.8)) |>
+  filter(!(PEVstrategy == 'mass' & PEVrounds == '-')) |># this means the same thing as single 
+  filter(!(PEVstrategy %in% c('none', 'catch-up', 'hybrid', 'AB') & massbooster_rep == '4 annual'))# only mass booster repetition in mass scenarios 
   
   
   # filter(!(RTSS=='none' & RTSScov > 0)) |>
@@ -158,18 +167,21 @@ combo <- combo |>
          speciesprop,       # proportion of each vector species
          treatment,         # treatment coverage
          SMC,               # SMC coverage
-         RTSS,              # RTS,S strategy
-         RTSScov,           # RTS,S coverage
-         RTSSage,           # RTS,S age groups
-         RTSSrounds,        # RTS,S rounds of mass vax
-         RTSSboost,         # RTS,S boosted immunogenicity for 4th dose
-         booster_rep,       # how many boosters 
-         MDAcov,            # MDA coverage
-         MDAtiming,         # timing of MDA round
+         PEV,               # Which PEV
+         PEVstrategy,       # PEV strategy
+         PEVcov,            # PEV coverage
+         PEVage,            # PEV age groups
+         PEVrounds,         # PEV rounds of mass vax
+         EPIbooster,        # Timing of EPI booster 
+         EPIextra,          # Extra EPI boosters for catch-up campaigns 
+         # RTSSboost,       # PEV boosted immunogenicity for 4th dose
+         massbooster_rep,   # how many mass boosters
+         MDA,               # MDA coverage
+         # MDAtiming,       # timing of MDA round
          ID,                # name of output file
          drawID             # parameter draw no.
-  ) |> as.data.frame()#|>
-  # filter(RTSSrounds!='every 3 years')
+  ) |> as.data.frame() |>
+  filter(PEV =='RTSS' | PEV == 'none')
 # # rearrange so new ones are at the end 
 # new <- combo |>
 #   filter(RTSSrounds!='every 3 years' & booster_rep == 'annual')
@@ -178,13 +190,13 @@ combo <- combo |>
 #   rbind(new)
 
 
-saveRDS(combo, paste0(path, '03_output/scenarios_torun.rds'))
+saveRDS(combo, paste0(path, '03_output/scenarios_torun_RTSS.rds'))
 
 # generate parameter list in malariasimulation format
 source(paste0(path, '02_code/Functions/generate_params.R'))
 
-generate_params(paste0(path, '03_output/scenarios_torun.rds'), # file path to pull
-                paste0(HPCpath, "03_output/parameters_torun.rds"))      # file path to push
+generate_params(paste0(path, '03_output/scenarios_torun_RTSS.rds'), # file path to pull
+                paste0(HPCpath, "03_output/parameters_torun_RTSS.rds"))      # file path to push
 
 ## Setting up cluster ------------------------------------------------------------------------------------------------
 setwd(HPCpath)
@@ -231,9 +243,9 @@ index <- index |>
   select(-f, -exist)
 
 # run a test with the first scenario
-t <- obj$enqueue_bulk(4020, runsim) #936-svmass+hybrid #545
+t <- obj$enqueue_bulk(112, runsim) 
 t$status()
-# t$wait(1000)
+t$wait(1000)
 #t$results()
 
 # submit jobs, 100 as a time
@@ -244,8 +256,8 @@ sjob <- function(x, y){
   
 }
 
-map2_dfr(seq(0, nrow(index)- 100, 100),
-         seq(99, nrow(index), 100),
+map2_dfr(seq(100, nrow(index)- 100, 100),
+         seq(199, nrow(index), 100),
          sjob)
 # map2_dfr(3998, 4080, sjob)
 # submit all remaining tasks
