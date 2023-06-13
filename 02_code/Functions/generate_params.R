@@ -408,6 +408,8 @@ generate_params <- function(inputpath,   # path to input scenarios
             massboosters <- round(1 * year) # 1 year after 3rd dose 
           } else if (massbooster_rep == '4 annual') {
             massboosters <- round(seq(1, 4) * year) # 4 annual boosters after 3rd dose
+          } else if (massbooster_rep == 'annual'){
+            massboosters <- round(seq(1, length(sim_length - program_start)) * year)
           }
           
           massbooster_cov <- c(PEVcov * 0.8, rep(PEVcov * 0.8 * 0.9, length(massboosters) - 1)) # coverage from 10.1016/S2214-109X(22)00416-8
@@ -423,13 +425,13 @@ generate_params <- function(inputpath,   # path to input scenarios
             min_wait <- 0
           } else if (PEVrounds == '1yr'){
             pevtimesteps <- c(first, first + seq(1 * year, sim_length, 1 * year))
-            min_wait <- 6 * year
+            min_wait <- 20 * year
           } else if (PEVrounds == '3yrs'){
             pevtimesteps <- c(first, first + seq(3 * year, sim_length, 3 * year))
-            min_wait <- 6 * year
+            min_wait <- 20 * year
           } else if (PEVrounds == '5yrs'){
             pevtimesteps <- c(first, first + seq(5 * year, sim_length, 5 * year))
-            min_wait <- 6 * year
+            min_wait <- 20 * year
           }
           
           # Set mass vaccination 
@@ -489,7 +491,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             timesteps = pevtimesteps, 
             coverages = PEVcov,
             age = round(5 * month),
-            min_wait = min_wait,
+            min_wait = 0,
             booster_timestep = epiboosters,
             booster_coverage = epiboost_cov,
             booster_profile = rep(list(rtss_booster_profile), length(epiboosters)),
@@ -504,7 +506,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             coverages = rep(PEVcov, length(pevtimesteps)),
             min_ages = min_ages,
             max_ages = max_ages,
-            min_wait = min_wait,
+            min_wait = 0,
             booster_timestep = massboosters,
             booster_coverage = massboost_cov,
             booster_profile = rep(list(rtss_booster_profile), length(massboosters))
@@ -643,12 +645,15 @@ generate_params <- function(inputpath,   # path to input scenarios
               massboosters <- round(1 * year) # 1 year after 3rd dose
             } else if (massbooster_rep == '4 annual') {
               massboosters <- round(seq(1, 4) * year) # 4 annual boosters after 3rd dose
+            } else if (massbooster_rep == 'annual'){
+              massboosters <- round(seq(1, (sim_length - program_start)/year) * year)
             }
             
-            massboosterprofiles <- if (length(massboosters) == 1){ 
-              list(r21_booster_profile) 
-            } else if (length(massboosters) ==4){
-              list(r21_booster_profile, r21_booster_profile2, r21_booster_profile2, r21_booster_profile2)}
+            if (length(massboosters) == 1){ 
+              massboosterprofiles <- list(r21_booster_profile) 
+            } else if (length(massboosters) >=4){
+              massboosterprofiles <- append(replicate(length(massboosters)-1, r21_booster_profile2, simplify = FALSE), list(r21_booster_profile), after = 0)
+            } 
             
             massbooster_cov <- c(PEVcov * 0.8, rep(PEVcov * 0.8 * 0.9, length(massboosters) - 1)) # coverage from 10.1016/S2214-109X(22)00416-8
             
@@ -663,13 +668,13 @@ generate_params <- function(inputpath,   # path to input scenarios
               min_wait <- 0
             } else if (PEVrounds == '1yr'){
               pevtimesteps <- c(first, first + seq(1 * year, sim_length, 1 * year))
-              min_wait <- 6 * year
+              min_wait <- 20 * year
             } else if (PEVrounds == '3yrs'){
               pevtimesteps <- c(first, first + seq(3 * year, sim_length, 3 * year))
-              min_wait <- 6 * year
+              min_wait <- 20 * year
             } else if (PEVrounds == '5yrs'){
               pevtimesteps <- c(first, first + seq(5 * year, sim_length, 5 * year))
-              min_wait <- 6 * year
+              min_wait <- 20 * year
             }
             
             # Set mass vaccination
@@ -729,7 +734,7 @@ generate_params <- function(inputpath,   # path to input scenarios
               timesteps = pevtimesteps,
               coverages = PEVcov,
               age = round(5 * month),
-              min_wait = min_wait,
+              min_wait = 0,
               booster_timestep = epiboosters,
               booster_coverage = epiboost_cov,
               booster_profile = epiboosterprofiles, # first booster is one thing, then any others are different
@@ -744,7 +749,7 @@ generate_params <- function(inputpath,   # path to input scenarios
               coverages = rep(PEVcov, length(pevtimesteps)),
               min_ages = min_ages,
               max_ages = max_ages,
-              min_wait = min_wait,
+              min_wait = 0,
               booster_timestep = massboosters,
               booster_coverage = massboost_cov,
               booster_profile = list(r21_booster_profile) 

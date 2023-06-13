@@ -93,7 +93,7 @@ EPIbooster <- c('12m', '12m boost', '18m', 'seasonal', '-')
 EPIextra <- c('5y', '10y', '-')
 
 # adding vaccine boosters: 0 - no fifth dose, fifth (2 booster doses), annual (every year), 6mo (every 6 months), 2yrs (every 2 years)
-massbooster_rep <- c('-', '4 annual')
+massbooster_rep <- c('-', '4 annual', 'annual')
 
 interventions <- crossing(treatment, SMC, PEV, PEVstrategy, PEVcov, PEVage, PEVrounds, EPIbooster, EPIextra, massbooster_rep, MDA)
 
@@ -125,7 +125,7 @@ combo <- combo |>
   filter(!(PEVstrategy %in% c('AB', 'hybrid','catch-up', 'mass') & PEVcov == 0)) |> # if vaccination, then coverage is not 0
   filter(!(PEVstrategy == 'none' & PEVcov == 0.8)) |>
   filter(!(PEVstrategy == 'mass' & PEVrounds == '-')) |># this means the same thing as single 
-  filter(!(PEVstrategy %in% c('none', 'catch-up', 'hybrid', 'AB') & massbooster_rep == '4 annual'))# only mass booster repetition in mass scenarios 
+  filter(!(PEVstrategy %in% c('none', 'catch-up', 'hybrid', 'AB') & massbooster_rep %in% c('4 annual', 'annual')))# only mass booster repetition in mass scenarios 
   
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -151,8 +151,8 @@ combo <- combo |>
          # MDAtiming,       # timing of MDA round
          ID,                # name of output file
          drawID             # parameter draw no.
-  ) |> as.data.frame() |>
-  filter(PEV =='RTSS' | PEV == 'none')
+  ) |> as.data.frame() #|>
+  # filter(PEV =='RTSS' | PEV == 'none')
 
 saveRDS(combo, paste0(path, '03_output/scenarios_torun_RTSS.rds'))
 
