@@ -482,9 +482,6 @@ generate_params <- function(inputpath,   # path to input scenarios
           # update booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
           rtss_booster_profile$cs <- c(6.37008, 0.35)
           
-          # We do'nt want the same kids to be vaccinated right away with mass after being vaccinated in AB campaign
-          min_wait <- 6 * year
-          
           # Set EPI strategy for young children 
           params <- set_pev_epi(
             parameters = params,
@@ -521,7 +518,16 @@ generate_params <- function(inputpath,   # path to input scenarios
       }
     } else if (PEV == 'R21'){
     
-      R21 ----------
+      # R21 ----------
+      # r21_efficacy <- read.csv(paste0(path, '01_data/efficacy_parameters.csv')) %>%
+      #   summarise(v_max = median(v_max),
+      #             alpha = median(alpha),
+      #             beta = median(beta))
+      # r21_params <- read.csv(paste0(path,'01_data/r21_malarisimulation_parameter_draws.csv')) %>%
+      #   group_by(par) %>%
+      #   summarize(median_mu = median(mu),
+      #             median_sd = median(sd))
+      
         if (PEVcov > 0) {
           r21_profile <- rtss_profile
           r21_profile$vmax <- 0.84#0.8441944
@@ -537,7 +543,7 @@ generate_params <- function(inputpath,   # path to input scenarios
           r21_booster_profile$cs <- c(9.24, 0.719)
           
           r21_booster_profile2 <- r21_booster_profile
-          
+          r21_booster_profile2$cs <- c(9.02, 0.845)
           
           program_start <- 5 * year
           
@@ -554,23 +560,13 @@ generate_params <- function(inputpath,   # path to input scenarios
           
           # AB
           if (PEVstrategy == "AB") {
-            params$pev_doses <- round(c(0, 1.5 * month, 3 * month)) # spacing from Hillary's R21 work
-            # params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
+            params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
             
-            if(EPIbooster == '12m' | EPIbooster == '12m boost') {
-              epiboosters <- round(12 * month)
-            } else if (EPIbooster == '18m') {
-              epiboosters <- round(18 * month) # from phase III R21 trial
-            }
+            epiboosters <- round(12 * month)
             
             boost_cov <- PEVcov * 0.8
             
             pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
-            
-            if (EPIbooster == '12m boost'){
-              # update booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
-              r21_booster_profile$cs <- c(6.37008, 0.35)
-            }
             
             params <- set_pev_epi(
               parameters = params,
@@ -592,8 +588,7 @@ generate_params <- function(inputpath,   # path to input scenarios
           
           # hybrid ----------
           if (PEV == "hybrid") {
-            params$pev_doses <- round(c(0, 1.5 * month, 3 * month)) # spacing from the R21 work
-            # params$pev_doses <- round(c(0, 1 * month, 2 * month)) # spacing from phase iii trial R21
+            params$pev_doses <- round(c(0, 1 * month, 2 * month)) # spacing from phase iii trial R21
             
             peak <- peak_season_offset(params)
             
@@ -601,9 +596,6 @@ generate_params <- function(inputpath,   # path to input scenarios
             
             boost_cov <- PEVcov * 0.8  # coverage from 10.1016/S2214-109X(22)00416-8 #else c(R21cov*0.8, R21cov*0.8*0.9)
             pevtimesteps <- warmup + program_start # starting 1 year after warmup ends
-            
-            # update booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
-            r21_booster_profile$cs <- c(6.37008, 0.35)
             
             params <- set_pev_epi(
               parameters = params,
@@ -625,16 +617,12 @@ generate_params <- function(inputpath,   # path to input scenarios
           # mass ----------
           if (PEVstrategy == 'mass'){
             
-            params$pev_doses <- round(c(0, 1.5 * month, 3 * month)) # spacing from the R21 work
-            # params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
+            params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
             
             # First set the EPI strategy
             EPIboosters <- round(c(12 * month))  # from phase III R21 trial
             pevtimesteps <- warmup + program_start # starting when warmup ends + program start
             EPIboost_cov <- PEVcov * 0.8
-            
-            # update booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
-            r21_booster_profile$cs <- c(6.37008, 0.35)
             
             params <- set_pev_epi(
               parameters = params,
@@ -656,6 +644,11 @@ generate_params <- function(inputpath,   # path to input scenarios
             } else if (massbooster_rep == '4 annual') {
               massboosters <- round(seq(1, 4) * year) # 4 annual boosters after 3rd dose
             }
+            
+            massboosterprofiles <- if (length(massboosters) == 1){ 
+              list(r21_booster_profile) 
+            } else if (length(massboosters) ==4){
+              list(r21_booster_profile, r21_booster_profile2, r21_booster_profile2, r21_booster_profile2)}
             
             massbooster_cov <- c(PEVcov * 0.8, rep(PEVcov * 0.8 * 0.9, length(massboosters) - 1)) # coverage from 10.1016/S2214-109X(22)00416-8
             
@@ -692,10 +685,9 @@ generate_params <- function(inputpath,   # path to input scenarios
               max_ages = max_ages,
               min_wait = min_wait,
               booster_timestep = massboosters, # timesteps following initial vaccination
-              booster_profile = rep(list(r21_booster_profile), length(massboosters)),
+              booster_profile = massboosterprofiles,#list(r21_booster_profile, rep(r21_booster_profile2, length(massboosters) -1)),
               booster_coverage = massbooster_cov # prop of vaccinated pop who will receive booster vaccine
             )
-            
             
             # var for outputting to check RTS,S timings are correct
             print(paste0("Mass timesteps: ", mass_pev_timesteps <- params$mass_pev_timesteps - warmup))
@@ -707,14 +699,13 @@ generate_params <- function(inputpath,   # path to input scenarios
           if (PEVstrategy == 'catch-up'){
             
             # Get timing for EPI boosters in catch-up campaigns
-            params$pev_doses <- round(c(0, 1.5 * month, 3 * month)) # spacing from the R21 work
-            # params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
+            params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
             
-            if (EPIbooster == '12m boost' & EPIextra == '5y') {
+            if (EPIextra == '5y') {
               epiboosters <- round(c(12 * month, 5 * year))
-            } else if (EPIbooster == '12m boost' & EPIextra == '10y') {
+            } else if (EPIextra == '10y') {
               epiboosters <- round(c(12 * month, 10 * year))
-            } else if (EPIbooster == '12m boost' & EPIextra == '-') {
+            } else if (EPIextra == '-') {
               epiboosters <- round(12 * month)
             }
             
@@ -726,11 +717,10 @@ generate_params <- function(inputpath,   # path to input scenarios
             
             pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
             
-            # update booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
-            r21_booster_profile$cs <- c(6.37008, 0.35)
-            
-            # We do'nt want the same kids to be vaccinated right away with mass after being vaccinated in AB campaign
-            min_wait <- 6 * year
+            epiboosterprofiles <- if (length(epiboosters) == 1){ 
+              list(r21_booster_profile) 
+            } else if (length(epiboosters) == 2){
+              list(r21_booster_profile, r21_booster_profile2)}
             
             # Set EPI strategy for young children
             params <- set_pev_epi(
@@ -742,7 +732,7 @@ generate_params <- function(inputpath,   # path to input scenarios
               min_wait = min_wait,
               booster_timestep = epiboosters,
               booster_coverage = epiboost_cov,
-              booster_profile = rep(list(r21_booster_profile), length(epiboosters)),
+              booster_profile = epiboosterprofiles, # first booster is one thing, then any others are different
               seasonal_boosters = FALSE
             )
             
@@ -757,7 +747,7 @@ generate_params <- function(inputpath,   # path to input scenarios
               min_wait = min_wait,
               booster_timestep = massboosters,
               booster_coverage = massboost_cov,
-              booster_profile = rep(list(r21_booster_profile), length(massboosters))
+              booster_profile = list(r21_booster_profile) 
             )
             
             print(paste0("Mass timesteps: ", mass_pev_timesteps <- params$mass_pev_timesteps - warmup))
