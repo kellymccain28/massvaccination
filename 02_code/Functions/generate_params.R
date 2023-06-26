@@ -20,11 +20,6 @@ generate_params <- function(inputpath,   # path to input scenarios
     warmup = data$warmup
     sim_length = data$sim_length
     speciesprop = data$speciesprop
-    # ITN = data$ITN
-    # ITNuse = data$ITNuse
-    # ITNboost = data$ITNboost
-    # resistance = data$resistance
-    # IRS = data$IRS
     treatment = data$treatment
     SMC = data$SMC
     PEV = data$PEV
@@ -409,7 +404,7 @@ generate_params <- function(inputpath,   # path to input scenarios
           } else if (massbooster_rep == '4 annual') {
             massboosters <- round(seq(1, 4) * year) # 4 annual boosters after 3rd dose
           } else if (massbooster_rep == 'annual'){
-            massboosters <- round(seq(1, length(sim_length - program_start)) * year)
+            massboosters <- round(seq(1, (sim_length - program_start)/year) * year)
           }
           
           massbooster_cov <- c(PEVcov * 0.8, rep(PEVcov * 0.8 * 0.9, length(massboosters) - 1)) # coverage from 10.1016/S2214-109X(22)00416-8
@@ -481,7 +476,7 @@ generate_params <- function(inputpath,   # path to input scenarios
           
           pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
           
-          # update booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
+          # update boosters to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
           rtss_booster_profile$cs <- c(6.37008, 0.35)
           
           # Set EPI strategy for young children 
@@ -529,8 +524,7 @@ generate_params <- function(inputpath,   # path to input scenarios
       #   group_by(par) %>%
       #   summarize(median_mu = median(mu),
       #             median_sd = median(sd))
-      
-        if (PEVcov > 0) {
+      if (PEVcov >0){
           r21_profile <- rtss_profile
           r21_profile$vmax <- 0.84#0.8441944
           r21_profile$alpha <- 0.99#0.9879701
@@ -589,7 +583,7 @@ generate_params <- function(inputpath,   # path to input scenarios
           }
           
           # hybrid ----------
-          if (PEV == "hybrid") {
+          if (PEVstrategy == "hybrid") {
             params$pev_doses <- round(c(0, 1 * month, 2 * month)) # spacing from phase iii trial R21
             
             peak <- peak_season_offset(params)
@@ -597,7 +591,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             hybridbooster <- round(c(peak - 5.5 * month), 0)
             
             boost_cov <- PEVcov * 0.8  # coverage from 10.1016/S2214-109X(22)00416-8 #else c(R21cov*0.8, R21cov*0.8*0.9)
-            pevtimesteps <- warmup + program_start # starting 1 year after warmup ends
+            pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
             
             params <- set_pev_epi(
               parameters = params,
@@ -614,6 +608,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             
             print(paste0('EPI timesteps: ', pev_epi_timesteps <- params$pev_epi_timesteps - warmup))
             print(paste0('EPI booster: ', params$pev_epi_booster_timestep))
+            print('hybrid parameterized)')
           }
           
           # mass ----------
@@ -713,54 +708,54 @@ generate_params <- function(inputpath,   # path to input scenarios
             } else if (EPIextra == '-') {
               epiboosters <- round(12 * month)
             }
-            
-            epiboost_cov <- c(PEVcov * 0.8, rep(PEVcov*0.8*0.9, length(epiboosters)-1))
-            
-            massboosters <- round(c(1 * year)) # 1 year after 3rd dose
-            
-            massboost_cov <- PEVcov * 0.8
-            
-            pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
-            
-            epiboosterprofiles <- if (length(epiboosters) == 1){ 
-              list(r21_booster_profile) 
-            } else if (length(epiboosters) == 2){
-              list(r21_booster_profile, r21_booster_profile2)}
-            
-            # Set EPI strategy for young children
-            params <- set_pev_epi(
-              parameters = params,
-              profile = r21_profile,
-              timesteps = pevtimesteps,
-              coverages = PEVcov,
-              age = round(5 * month),
-              min_wait = 0,
-              booster_timestep = epiboosters,
-              booster_coverage = epiboost_cov,
-              booster_profile = epiboosterprofiles, # first booster is one thing, then any others are different
-              seasonal_boosters = FALSE
-            )
-            
-            # Set catch-up mass campaigns
-            params <- set_mass_pev(
-              parameters = params,
-              profile = r21_profile,
-              timesteps = pevtimesteps,
-              coverages = rep(PEVcov, length(pevtimesteps)),
-              min_ages = min_ages,
-              max_ages = max_ages,
-              min_wait = 0,
-              booster_timestep = massboosters,
-              booster_coverage = massboost_cov,
-              booster_profile = list(r21_booster_profile) 
-            )
-            
-            print(paste0("Mass timesteps: ", mass_pev_timesteps <- params$mass_pev_timesteps - warmup))
-            print(paste0('EPI timesteps: ', pev_epi_timesteps <- params$pev_epi_timesteps - warmup))
-            print(paste0('EPI booster: ', params$pev_epi_booster_timestep))
-            print(paste0('Mass booster: ', params$mass_pev_booster_timestep))
+        
+        epiboost_cov <- c(PEVcov * 0.8, rep(PEVcov*0.8*0.9, length(epiboosters)-1))
+        
+        massboosters <- round(c(1 * year)) # 1 year after 3rd dose
+        
+        massboost_cov <- PEVcov * 0.8
+        
+        pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
+        
+        epiboosterprofiles <- if (length(epiboosters) == 1){ 
+          list(r21_booster_profile) 
+        } else if (length(epiboosters) == 2){
+          list(r21_booster_profile, r21_booster_profile2)}
+        
+        # Set EPI strategy for young children
+        params <- set_pev_epi(
+          parameters = params,
+          profile = r21_profile,
+          timesteps = pevtimesteps,
+          coverages = PEVcov,
+          age = round(5 * month),
+          min_wait = 0,
+          booster_timestep = epiboosters,
+          booster_coverage = epiboost_cov,
+          booster_profile = epiboosterprofiles, # first booster is one thing, then any others are different
+          seasonal_boosters = FALSE
+        )
+        
+        # Set catch-up mass campaigns
+        params <- set_mass_pev(
+          parameters = params,
+          profile = r21_profile,
+          timesteps = pevtimesteps,
+          coverages = rep(PEVcov, length(pevtimesteps)),
+          min_ages = min_ages,
+          max_ages = max_ages,
+          min_wait = 0,
+          booster_timestep = massboosters,
+          booster_coverage = massboost_cov,
+          booster_profile = list(r21_booster_profile) 
+        )
+        
+        print(paste0("Mass timesteps: ", mass_pev_timesteps <- params$mass_pev_timesteps - warmup))
+        print(paste0('EPI timesteps: ', pev_epi_timesteps <- params$pev_epi_timesteps - warmup))
+        print(paste0('EPI booster: ', params$pev_epi_booster_timestep))
+        print(paste0('Mass booster: ', params$mass_pev_booster_timestep))
           }
-        }
+      }
     }
     
     # MDA  ----------
@@ -804,7 +799,8 @@ generate_params <- function(inputpath,   # path to input scenarios
     #   params$drug_prophylaxis_shape <- c(11.3, 2.87)
     #   
     # }
-    
+  
+
     # correlate interventions  ----------
     # correlations <- get_correlation_parameters(params)
     
@@ -831,7 +827,7 @@ generate_params <- function(inputpath,   # path to input scenarios
     print(paste(x,'pfpr=',data$pfpr))
     
     return(data)
-  }
+}
   
   # loop through function to generate parameters one by one
   output <- map_dfr(1:nrow(scenarios), generate_params2)

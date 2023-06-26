@@ -20,7 +20,7 @@ sim_length <- 21 * year   # value > 0
 # number of parameter draws
 # 0 = use mean values, 1 to 50 = draws
 drawID <- c(0, 942,  40, 541, 497, 877, 697, 400, 450, 806, 
-            600, 670, 363, 838, 478, 403, 375, 335, 598, 142)#,
+            600, 670, 363, 838, 478, 403, 375, 335, 598, 142,
             919, 444, 986, 659,  71, 457, 891, 188, 432, 975, 
             488, 867, 538, 912, 534, 215, 540, 866, 613, 973, 
             917, 937, 931, 296, 835, 328, 147, 701, 889, 708, 888)# c(0, sample(1:1000, 50))#c(0, 1:50)
@@ -126,7 +126,7 @@ combo <- combo |>
   filter(!(PEVstrategy == 'none' & PEVcov == 0.8)) |>
   filter(!(PEVstrategy == 'mass' & PEVrounds == '-')) |># this means the same thing as single 
   filter(!(PEVstrategy %in% c('none', 'catch-up', 'hybrid', 'AB') & massbooster_rep %in% c('4 annual', 'annual')))# only mass booster repetition in mass scenarios 
-  
+
 # put variables into the same order as function arguments
 combo <- combo |> 
   select(population,        # simulation population
@@ -145,14 +145,14 @@ combo <- combo |>
          PEVrounds,         # PEV rounds of mass vax
          EPIbooster,        # Timing of EPI booster 
          EPIextra,          # Extra EPI boosters for catch-up campaigns 
-         # RTSSboost,       # PEV boosted immunogenicity for 4th dose
          massbooster_rep,   # how many mass boosters
          MDA,               # MDA coverage
-         # MDAtiming,       # timing of MDA round
          ID,                # name of output file
          drawID             # parameter draw no.
-  ) |> as.data.frame() #|>
-  # filter(PEV =='RTSS' | PEV == 'none')
+  ) |> as.data.frame() |>
+  filter(PEV =='RTSS' | PEV == 'none') #|>filter(massbooster_rep!='annual')
+# new <- combo |> filter(massbooster_rep=='annual')
+combo <- rbind(combo, new)
 
 saveRDS(combo, paste0(path, '03_output/scenarios_torun_RTSS.rds'))
 
@@ -193,29 +193,36 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 # obj$install_packages("github::mrc-ide/malariasimulation@dev")
 
 # Run tasks -------------------------------------------------------------------------------------------------------------
+combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_test.rds"))
+combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_RTSS.rds")) 
+combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_R21.rds"))
+# x <- c(10,27,37,38, 43,44,79,80,85,86)
 x = c(1:nrow(combo)) # runs
-# x <- which(combo$MDAcov>0 ) # to get only indices where there is MDA because we only need to rerun those
+x <- which(combo$massbooster_rep=='annual')# re-sending runs for RTSS amd r21
+x <- x[900:960]
+# x <- unname(redo)
+# x <- c(1:86, which(combo$PEVstrategy=='mass'&combo$PEVrounds=='3yrs')) 
 # x <- 11049:(nrow(combo)) # just the new ones (with annual boosters and 0.01)
 # define all combinations of scenarios and draws
 index <- tibble(x = x)
 
 # remove ones that have already been run
 index <- index |>
-  mutate(f = paste0(HPCpath, "HPC/raw_modelrun_", index$x, ".rds")) |>
+  mutate(f = paste0(HPCpath, "HPC_R21/raw_modelrun_", index$x, ".rds")) |>
   mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) |>
   filter(exist == 0) |>
   select(-f, -exist)
 
-# run a test with the first scenario
-t <- obj$enqueue_bulk(1212, runsim) 
+# run a test with test scenario
+t <- obj$enqueue_bulk(27, runsimtest) 
 t$status()
-t$wait(1000)
+# t$wait(1000)
 #t$results()
 
 # submit jobs, 100 as a time
 sjob <- function(x, y){
   
-  t <- obj$enqueue_bulk(index[x:y,], runsim)
+  t <- obj$enqueue_bulk(index[x:y,], runsimR21)
   return(1)
   
 }
@@ -223,7 +230,8 @@ sjob <- function(x, y){
 map2_dfr(seq(0, nrow(index) - 100, 100),
          seq(99, nrow(index), 100),
          sjob)
-# map2_dfr(3998, 4080, sjob)
+
+
 # submit all remaining tasks
 t <- obj$enqueue_bulk(index, runsim)
 t$status()

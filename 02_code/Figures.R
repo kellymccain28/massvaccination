@@ -87,7 +87,7 @@ plot_annual_outcome <- function(prev, seas_type, outcome){
 
 #####
 # Plot outcomes averted (Deaths and DALYs, severe cases, clinical cases)
-plot_out_averted <- function(outcome, prev, seas, rtss){
+plot_out_averted <- function(df, outcome, prev, seas, PEVtype){
   # input: paste0(HPCpath,'./HPC_summarized/aggregatedoversim_1_',length(index),'.rds')
   # possible values for outcome: dalys_averted, cases_averted, deaths_averted, severe_averted #u5_dalys_averted, u5_severe_averted, u5_cases_averted
   # output: plot of specified outcome averted by age group
@@ -108,21 +108,21 @@ plot_out_averted <- function(outcome, prev, seas, rtss){
     } else if(outcome == 'severe_avertedper1000vax'){
       out_label <- 'Severe cases averted per \n1000 fully vaccinated people'
     } 
-    output$int_ID_lab <- paste0(output$RTSS, " to ", output$RTSSage, ', ', output$booster_rep, '; ', output$MDAtiming)#str_sub(output$int_ID, 6, -3)
+    output <- df %>% 
+      mutate(int_ID_lab = paste(PEVstrategy, PEVage, PEVrounds, EPIbooster, EPIextra, massbooster_rep, MDA))
   
-    plt <- ggplot(output %>% filter(pfpr == prev) %>% filter(seasonality == seas) %>% filter(grepl(rtss, RTSS))) +
+    plt <- ggplot(output %>% filter(pfpr == prev) %>% filter(seasonality == seas) %>% filter(grepl(PEVtype, PEV))) +
       geom_col(aes(x = age_grp, y = .data[[paste0(outcome, "_median")]], group = int_ID_lab, fill = int_ID_lab), 
                color = 'black', position = 'dodge') + 
       geom_linerange(aes(x = age_grp, ymin = .data[[paste0(outcome, "_lower")]], ymax = .data[[paste0(outcome, "_upper")]], group = int_ID_lab), 
                      position = position_dodge(width = 0.9), linewidth = 0.3) +
-      # facet_wrap(~int_ID) + 
       theme_bw() + 
       labs(y = out_label, x = 'Age group', title = paste0('Initial PfPR = ', prev, ', ', seas)) +
       theme(axis.text.x=element_text(angle=90),
             legend.title=element_blank(),
             legend.position = c(0.8, 0.8))
     
-    ggsave(paste0(path, '03_output/Figures/', i, prev, seas, rtss, '.png'), width = 15, height = 10, units = 'in')
+    ggsave(paste0(path, '03_output/Figures_', PEVtype, '/', i, prev, seas, PEVtype, '.png'), width = 15, height = 10, units = 'in')
     return(plt)
 }
 

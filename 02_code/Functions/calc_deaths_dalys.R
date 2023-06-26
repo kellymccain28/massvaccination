@@ -26,7 +26,7 @@ mortality_rate <- function(x,
     # dplyr::mutate(mortality_rate = (1 - (treatment_scaler * .data$treatment)) * scaler * .data$sev) |>
     
     # mortality rate alternative (consistent with old ICL analysis)
-    dplyr::mutate(mortality_rate = scaler * .data$sev) |>
+    dplyr::mutate(mortality_rate = scaler * .data$sevcases) |>
     
     dplyr::mutate(deaths = .data$mortality_rate * .data$n)  # deaths
 }
@@ -64,22 +64,21 @@ daly_components <- function(x,
                   yll_lower = ifelse(yll_lower < 0, 0, yll_lower),  # should be no negative yll from older age groups
                   yll_upper =  ifelse(yll_upper < 0, 0, yll_upper), # should be no negative yll from older age groups
                   
-                  yld = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases * episode_length * weight1 + .data$sev_cases * severe_episode_length * severe_weight,
-                                         .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases * episode_length * weight2 + .data$sev_cases * severe_episode_length * severe_weight,
-                                         .data$age_upper > 15 ~ .data$cases * episode_length * weight3 + .data$sev_cases * severe_episode_length * severe_weight),
+                  yld = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases * episode_length * weight1 + .data$sevcases * severe_episode_length * severe_weight,
+                                         .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$clinical * episode_length * weight2 + .data$sevcases * severe_episode_length * severe_weight,
+                                         .data$age_upper > 15 ~ .data$cases * episode_length * weight3 + .data$sevcases * severe_episode_length * severe_weight),
                   
-                  yld_lower = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_lower * episode_length * weight1 + .data$sev_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_lower * episode_length * weight2 + .data$sev_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper > 15 ~ .data$cases_lower * episode_length * weight3 + .data$sev_cases * severe_episode_length * severe_weight),
+                  yld_lower = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_lower * episode_length * weight1 + .data$sevcases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_lower * episode_length * weight2 + .data$sevcases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 15 ~ .data$cases_lower * episode_length * weight3 + .data$sevcases * severe_episode_length * severe_weight),
                   
-                  yld_upper = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_upper * episode_length * weight1 + .data$sev_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_upper * episode_length * weight2 + .data$sev_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper > 15 ~ .data$cases_upper * episode_length * weight3 + .data$sev_cases * severe_episode_length * severe_weight)) |>
+                  yld_upper = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_upper * episode_length * weight1 + .data$sevcases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_upper * episode_length * weight2 + .data$sevcases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 15 ~ .data$cases_upper * episode_length * weight3 + .data$sevcases * severe_episode_length * severe_weight)) |>
     
     dplyr::mutate(daly = yll + yld,
                   daly_upper = yll_lower + yld_lower,
                   daly_lower = yll_upper + yld_upper)
-  
   return(output)
   
 }
