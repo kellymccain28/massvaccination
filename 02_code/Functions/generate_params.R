@@ -311,7 +311,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             epiboosters <- round(18 * month) # from phase III R21 trial
           } 
           
-          boost_cov <- PEVcov * 0.8
+          boost_cov <- 0.8
           
           pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
           
@@ -345,10 +345,10 @@ generate_params <- function(inputpath,   # path to input scenarios
           
           peak <- peak_season_offset(params)
           
-          hybridbooster <- round(c(peak - 5.5 * month), 0)
+          hybridbooster <- round(c(peak - 3.5 * month), 0)
           
-          boost_cov <- PEVcov * 0.8  # coverage from 10.1016/S2214-109X(22)00416-8 #else c(PEVcov*0.8, PEVcov*0.8*0.9)
-          pevtimesteps <- warmup + program_start # starting 1 year after warmup ends
+          boost_cov <- 0.8  # coverage from 10.1016/S2214-109X(22)00416-8 #else c(PEVcov*0.8, PEVcov*0.8*0.9)
+          pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
           
           # update booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
           rtss_booster_profile$cs <- c(6.37008, 0.35)
@@ -379,10 +379,11 @@ generate_params <- function(inputpath,   # path to input scenarios
           # First set the EPI strategy 
           EPIboosters <- round(c(12 * month))  # from phase III R21 trial
           pevtimesteps <- warmup + program_start # starting when warmup ends + program start
-          EPIboost_cov <- PEVcov * 0.8 
+          EPIboost_cov <- 0.8 
           
-          # update booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
-          rtss_booster_profile$cs <- c(6.37008, 0.35)
+          # update 4th booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
+          rtss_booster_4th <- rtss_booster_profile
+          rtss_booster_4th$cs <- c(6.37008, 0.35)
           
           params <- set_pev_epi(
             parameters = params,
@@ -393,24 +394,24 @@ generate_params <- function(inputpath,   # path to input scenarios
             min_wait = 0,
             booster_timestep = EPIboosters,
             booster_coverage = EPIboost_cov,
-            booster_profile = list(rtss_booster_profile),
+            booster_profile = list(rtss_booster_4th),
             seasonal_boosters = FALSE)
           
           # Get timing for mass vaccination rounds
           peak <- peak_season_offset(params)
           
           if (massbooster_rep == '-') {
-            massboosters <- round(1 * year) # 1 year after 3rd dose 
+            massboosters <- round(12 * month) # 1 year after 3rd dose 
           } else if (massbooster_rep == '4 annual') {
-            massboosters <- round(seq(1, 4) * year) # 4 annual boosters after 3rd dose
+            massboosters <- round(seq(12, 48) * month) # 4 annual boosters after 3rd dose
           } else if (massbooster_rep == 'annual'){
-            massboosters <- round(seq(1, (sim_length - program_start)/year) * year)
+            massboosters <- round(seq(12, (sim_length - program_start)/month, by = 12) * month)
           }
           
-          massbooster_cov <- c(PEVcov * 0.8, rep(PEVcov * 0.8 * 0.9, length(massboosters) - 1)) # coverage from 10.1016/S2214-109X(22)00416-8
+          massbooster_cov <- c(0.8, rep(0.9, length(massboosters)-1))#0.8 * (0.9 ^ (0:(length(massboosters)-1))) # coverage from 10.1016/S2214-109X(22)00416-8
           
           if(seas_name == 'seasonal'){
-            first <- round(warmup + program_start + (peak - month * 5.5), 0) # after program start, 5.5 months prior to peak for seasonal (RTSS-CE repo)
+            first <- round(warmup + program_start + (peak - month * 3.5), 0) # after program start, 3.5 months prior to peak for seasonal (RTSS-CE repo)
           } else if(seas_name == 'perennial'){
             first <- round(warmup + program_start) # non seasonally distributed mass campaign
           }
@@ -442,7 +443,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             max_ages = max_ages,
             min_wait = min_wait,
             booster_timestep = massboosters, # timesteps following initial vaccination 
-            booster_profile = rep(list(rtss_booster_profile), length(massboosters)),
+            booster_profile = append(replicate(length(massboosters)-1, rtss_booster_profile, simplify = FALSE), list(rtss_booster_4th), after = 0),
             booster_coverage = massbooster_cov # prop of vaccinated pop who will receive booster vaccine
           )
           
@@ -468,11 +469,11 @@ generate_params <- function(inputpath,   # path to input scenarios
             epiboosters <- round(12 * month)
           }
           
-          epiboost_cov <- c(PEVcov * 0.8, rep(PEVcov*0.8*0.9, length(epiboosters)-1))
+          epiboost_cov <- 0.8 * (0.9 ^ (0:(length(epiboosters)-1)))
           
           massboosters <- round(c(1 * year)) # 1 year after 3rd dose 
           
-          massboost_cov <- PEVcov * 0.8
+          massboost_cov <- 0.8
           
           pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
           
@@ -560,7 +561,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             
             epiboosters <- round(12 * month)
             
-            boost_cov <- PEVcov * 0.8
+            boost_cov <- 0.8
             
             pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
             
@@ -588,9 +589,9 @@ generate_params <- function(inputpath,   # path to input scenarios
             
             peak <- peak_season_offset(params)
             
-            hybridbooster <- round(c(peak - 5.5 * month), 0)
+            hybridbooster <- round(c(peak - 3.5 * month), 0)
             
-            boost_cov <- PEVcov * 0.8  # coverage from 10.1016/S2214-109X(22)00416-8 #else c(R21cov*0.8, R21cov*0.8*0.9)
+            boost_cov <- 0.8  # coverage from 10.1016/S2214-109X(22)00416-8 #else c(R21cov*0.8, R21cov*0.8*0.9)
             pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
             
             params <- set_pev_epi(
@@ -619,7 +620,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             # First set the EPI strategy
             EPIboosters <- round(c(12 * month))  # from phase III R21 trial
             pevtimesteps <- warmup + program_start # starting when warmup ends + program start
-            EPIboost_cov <- PEVcov * 0.8
+            EPIboost_cov <- 0.8
             
             params <- set_pev_epi(
               parameters = params,
@@ -650,10 +651,10 @@ generate_params <- function(inputpath,   # path to input scenarios
               massboosterprofiles <- append(replicate(length(massboosters)-1, r21_booster_profile2, simplify = FALSE), list(r21_booster_profile), after = 0)
             } 
             
-            massbooster_cov <- c(PEVcov * 0.8, rep(PEVcov * 0.8 * 0.9, length(massboosters) - 1)) # coverage from 10.1016/S2214-109X(22)00416-8
+            massbooster_cov <- c(0.8, rep(0.9, length(massboosters)-1))#0.8 * (0.9 ^ (0:(length(massboosters)-1))) # coverage from 10.1016/S2214-109X(22)00416-8
             
             if(seas_name == 'seasonal'){
-              first <- round(warmup + program_start + (peak - month * 5.5), 0) # after program start, 5.5 months prior to peak for seasonal (R21-CE repo)
+              first <- round(warmup + program_start + (peak - month * 3.5), 0) # after program start, 3.5 months prior to peak for seasonal (R21-CE repo)
             } else if(seas_name == 'perennial'){
               first <- round(warmup + program_start) # non seasonally distributed mass campaign
             }
@@ -709,11 +710,11 @@ generate_params <- function(inputpath,   # path to input scenarios
               epiboosters <- round(12 * month)
             }
         
-        epiboost_cov <- c(PEVcov * 0.8, rep(PEVcov*0.8*0.9, length(epiboosters)-1))
+        epiboost_cov <- 0.8 * (0.9 ^ (0:(length(epiboosters)-1)))
         
         massboosters <- round(c(1 * year)) # 1 year after 3rd dose
         
-        massboost_cov <- PEVcov * 0.8
+        massboost_cov <- 0.8
         
         pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
         
