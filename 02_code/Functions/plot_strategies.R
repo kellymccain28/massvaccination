@@ -66,7 +66,7 @@ plot_doses <- function(df, strategy){
   boosters <- c("#31A354", "#006D2C")
   
   p <- ggplot(df %>% filter(strategytype == strategy)) + 
-    geom_ribbon(aes(x = t/12, ymax = prevalence_2_10*mult, ymin = 0, color = as.character(pfpr)), fill = "#BDD7E7", alpha = 0.5) +#, fill = "#BDD7E7"
+    # geom_ribbon(aes(x = t/12, ymax = prevalence_2_10*mult, ymin = 0, color = as.character(pfpr)), fill = "#BDD7E7", alpha = 0.5) +#, fill = "#BDD7E7"
     geom_col(aes(x = t/12, y = dosecount, fill = fct_relevel(dosetype, 'Dose 1','Dose 2','Dose 3','First booster','Extra boosters')), 
                  alpha = 0.7)+ # , position = 'dodge'
     facet_wrap(~labels, scales = 'free') + 
@@ -78,8 +78,8 @@ plot_doses <- function(df, strategy){
          color = '') +
     scale_fill_manual(values = c(primaryseries, boosters),
                       labels = c('Dose 1','Dose 2','Dose 3','First booster','Extra boosters')) +
-    scale_color_manual(values = "#BDD7E7",
-                       labels = expression(italic(Pf)~PR[2-10])) + 
+    # scale_color_manual(values = "#BDD7E7",
+    #                    labels = expression(italic(Pf)~PR[2-10])) + 
     scale_x_continuous(breaks = seq(0,11, by = 1))
   
   print(p)
@@ -94,9 +94,9 @@ for (i in strategies){
 #           plot2+labs(tag="B"),
 #           plot3+labs(tag="C"),
 #           nrow=3,align="hv",rel_heights = c(0.9,1.4, 1.4))
-ggsave(filename = paste0(HPCpath, "03_output/", HPCfolder, "/Fig1_Routine.png"), plot1, bg = "white",width = 15, height=8)
-ggsave(filename = paste0(HPCpath, "03_output/", HPCfolder, "/Fig1_Catch-up.png"), plot2, bg = "white",width = 15, height=8)
-ggsave(filename = paste0(HPCpath, "03_output/", HPCfolder, "/Fig1_Mass.png"), plot3, bg = "white",width = 15, height=8)
+ggsave(filename = paste0(HPCpath, "03_output/Other figures/Fig1_Routine.png"), plot1, bg = "white",width = 15, height=8)
+ggsave(filename = paste0(HPCpath, "03_output/Other figures/Fig1_Catch-up.png"), plot2, bg = "white",width = 15, height=8)
+ggsave(filename = paste0(HPCpath, "03_output/Other figures/Fig1_Mass.png"), plot3, bg = "white",width = 15, height=8)
 
 # "#EFF3FF" "#BDD7E7" "#6BAED6" "#3182BD" "#08519C"
 # "#FEE5D9" "#FCAE91" "#FB6A4A" "#DE2D26" "#A50F15"

@@ -28,6 +28,7 @@ drawID <- c(0, 942,  40, 541, 497, 877, 697, 400, 450, 806,
 # SITE set-up ----
 # parasite prevalence 2-10 year olds
 pfpr <- c(0.01, 0.03, 0.05, 0.25, 0.45, 0.65)
+# pfpr <- c(0.01, 0.02, 0.03)
 
 # seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
 # drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
@@ -93,7 +94,8 @@ EPIbooster <- c('12m', '12m boost', '18m', 'seasonal', '-')
 EPIextra <- c('5y', '10y', '-')
 
 # adding vaccine boosters: 0 - no fifth dose, fifth (2 booster doses), annual (every year), 6mo (every 6 months), 2yrs (every 2 years)
-massbooster_rep <- c('-', '4 annual', 'annual')
+massbooster_rep <- c('-', '4 annual', 'annual', '4 annual, no drop', 'annual no drop')
+
 
 interventions <- crossing(treatment, SMC, PEV, PEVstrategy, PEVcov, PEVage, PEVrounds, EPIbooster, EPIextra, massbooster_rep, MDA)
 
@@ -125,7 +127,7 @@ combo <- combo |>
   filter(!(PEVstrategy %in% c('AB', 'hybrid','catch-up', 'mass') & PEVcov == 0)) |> # if vaccination, then coverage is not 0
   filter(!(PEVstrategy == 'none' & PEVcov == 0.8)) |>
   filter(!(PEVstrategy == 'mass' & PEVrounds == '-')) |># this means the same thing as single 
-  filter(!(PEVstrategy %in% c('none', 'catch-up', 'hybrid', 'AB') & massbooster_rep %in% c('4 annual', 'annual')))# only mass booster repetition in mass scenarios 
+  filter(!(PEVstrategy %in% c('none', 'catch-up', 'hybrid', 'AB') & massbooster_rep %in% c('4 annual', 'annual', '4 annual, no drop', 'annual no drop')))# only mass booster repetition in mass scenarios 
 
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -150,17 +152,20 @@ combo <- combo |>
          ID,                # name of output file
          drawID             # parameter draw no.
   ) |> as.data.frame() |>
-  filter(PEV =='RTSS' | PEV == 'none') #|>filter(massbooster_rep!='annual')
-# new <- combo |> filter(massbooster_rep=='annual')
+  filter(PEV == 'R21' | PEV == 'none') %>% filter(!(massbooster_rep %in% c('4 annual, no drop', 'annual no drop'))) 
+new <- combo%>% filter(massbooster_rep%in%c('4 annual, no drop', 'annual no drop'))
+  # filter(!(massbooster_rep %in% c('4 annual, no drop', 'annual no drop'))) 
 combo <- rbind(combo, new)
+# new <- combo |> filter(massbooster_rep=='annual')
+# combo <- rbind(combo, new)
 
-saveRDS(combo, paste0(path, '03_output/scenarios_torun_RTSS.rds'))
+saveRDS(combo, paste0(path, '03_output/scenarios_torun_R21.rds'))
 
 # generate parameter list in malariasimulation format
 source(paste0(path, '02_code/Functions/generate_params.R'))
 
-generate_params(paste0(path, '03_output/scenarios_torun_RTSS.rds'), # file path to pull
-                paste0(HPCpath, "03_output/parameters_torun_RTSS.rds"))      # file path to push
+generate_params(paste0(path, '03_output/scenarios_torun_R21.rds'), # file path to pull
+                paste0(HPCpath, "03_output/parameters_torun_R21.rds"))      # file path to push
 
 ## Setting up cluster ------------------------------------------------------------------------------------------------
 setwd(HPCpath)
@@ -196,13 +201,18 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_test.rds"))
 combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_RTSS.rds")) 
 combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_R21.rds"))
+combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_elimination.rds"))
 # x <- c(10,27,37,38, 43,44,79,80,85,86)
-x = c(1:nrow(combo)) # runs
-x <- which(combo$massbooster_rep=='annual')# re-sending runs for RTSS amd r21
-x <- x[900:960]
-# x <- unname(redo)
-# x <- c(1:86, which(combo$PEVstrategy=='mass'&combo$PEVrounds=='3yrs')) 
-# x <- 11049:(nrow(combo)) # just the new ones (with annual boosters and 0.01)
+# x = c(350:nrow(combo)) # runs
+
+x <- which(combo$massbooster_rep %in% c('4 annual, no drop', 'annual no drop'))# re-sending runs for RTSS amd r21
+x <- x[4800:4896]
+# x <- x[900:960]
+# x <- which((combo$PEVstrategy == 'mass' & combo$massbooster_rep != '-' & combo$PEVrounds !='single') |
+#              (combo$PEVstrategy == 'catch-up' & combo$EPIextra != '-') |
+#              combo$PEVstrategy == 'hybrid')
+# x <- x[1990:2040]
+
 # define all combinations of scenarios and draws
 index <- tibble(x = x)
 
@@ -214,7 +224,7 @@ index <- index |>
   select(-f, -exist)
 
 # run a test with test scenario
-t <- obj$enqueue_bulk(27, runsimtest) 
+t <- obj$enqueue_bulk(27, runsimR21) 
 t$status()
 # t$wait(1000)
 #t$results()
@@ -233,5 +243,5 @@ map2_dfr(seq(0, nrow(index) - 100, 100),
 
 
 # submit all remaining tasks
-t <- obj$enqueue_bulk(index, runsim)
+t <- obj$enqueue_bulk(index, runsimelim)
 t$status()
