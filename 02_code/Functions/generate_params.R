@@ -743,7 +743,7 @@ generate_params <- function(inputpath,   # path to input scenarios
               profile = r21_profile,
               timesteps = pevtimesteps,
               coverages = PEVcov,
-              age = round(5 * month),
+              age = round(5 * month),# Hillary did 6 months of age 
               min_wait = 0,
               booster_timestep = epiboosters,
               booster_coverage = epiboost_cov,
