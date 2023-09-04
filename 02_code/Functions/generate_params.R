@@ -71,6 +71,10 @@ generate_params <- function(inputpath,   # path to input scenarios
     ages <- round(flat_demog$V3 * year) # top of age bracket
     deathrates <- flat_demog$V5 / 365   # age-specific death rates
     
+    # flat_demog <- read.csv(paste0(HPCpath, "01_data/UN_2022_demog.csv"))#read.table(paste0(HPCpath, "01_data/Flat_demog.txt")) # from mlgts
+    # ages <- round(flat_demog$age_high * year) # top of age bracket
+    # deathrates <- flat_demog$death_rate / 365   # age-specific death rates
+    
     params <- set_demography(
       params,
       agegroups = ages,
@@ -403,7 +407,7 @@ generate_params <- function(inputpath,   # path to input scenarios
           if (massbooster_rep == '-') {
             massboosters <- round(12 * month) # 1 year after 3rd dose 
           } else if (massbooster_rep == '4 annual' | massbooster_rep == '4 annual, no drop') {
-            massboosters <- round(seq(12, 48) * month) # 4 annual boosters after 3rd dose
+            massboosters <- round(seq(12, 48, by = 12) * month) # 4 annual boosters after 3rd dose
           } else if (massbooster_rep == 'annual' | massbooster_rep == 'annual no drop'){
             massboosters <- round(seq(12, (sim_length - program_start)/month, by = 12) * month)
           }
@@ -484,38 +488,48 @@ generate_params <- function(inputpath,   # path to input scenarios
           # update 4th booster to have same effect as dose 3 per Thompson et al. 2022 (when time between 3rd and 4th dose is 12 mo)
           rtss_booster_4th <- rtss_booster_profile
           rtss_booster_4th$cs <- c(6.37008, 0.35)
-          # any boosters afterward would be normal boosters
-          epiboosterprofiles <- if (length(epiboosters) == 1){ 
-            list(rtss_booster_4th) 
-          } else if (length(epiboosters) == 2){
-            list(rtss_booster_4th, rtss_booster_profile)}
           
           # Set EPI strategy for young children 
-          params <- set_pev_epi(
-            parameters = params,
-            profile = rtss_profile,
-            timesteps = pevtimesteps, 
-            coverages = PEVcov,
-            age = round(5 * month),
-            min_wait = 0,
-            booster_timestep = epiboosters,
-            booster_coverage = epiboost_cov,
-            booster_profile = rep(list(rtss_booster_profile), length(epiboosters)),
-            seasonal_boosters = FALSE
-          )  
+          # any boosters afterward would be normal boosters
+          if (length(epiboosters) == 1){ 
+            params <- set_pev_epi(
+              parameters = params,
+              profile = rtss_profile,
+              timesteps = pevtimesteps, 
+              coverages = PEVcov,
+              age = round(5 * month),
+              min_wait = 0,
+              booster_timestep = epiboosters,
+              booster_coverage = epiboost_cov,
+              booster_profile = list(rtss_booster_4th),#rep(list(rtss_booster_profile), length(epiboosters)),
+              seasonal_boosters = FALSE
+            )  
+          } else if (length(epiboosters) == 2){
+            params <- set_pev_epi(
+              parameters = params,
+              profile = rtss_profile,
+              timesteps = pevtimesteps, 
+              coverages = PEVcov,
+              age = round(5 * month),
+              min_wait = 0,
+              booster_timestep = epiboosters,
+              booster_coverage = epiboost_cov,
+              booster_profile = list(rtss_booster_4th, rtss_booster_profile),#rep(list(rtss_booster_profile), length(epiboosters)),
+              seasonal_boosters = FALSE) 
+            }
           
           # Set catch-up mass campaigns
           params <- set_mass_pev(
             parameters = params,
             profile = rtss_profile,
             timesteps = pevtimesteps,
-            coverages = rep(PEVcov, length(pevtimesteps)),
+            coverages = PEVcov,
             min_ages = min_ages,
             max_ages = max_ages,
             min_wait = 0,
             booster_timestep = massboosters,
             booster_coverage = massboost_cov,
-            booster_profile = rep(list(rtss_booster_profile), length(massboosters))
+            booster_profile = list(rtss_booster_4th) #rep(list(rtss_booster_profile), length(massboosters))
           )
           
           print(paste0("Mass timesteps: ", mass_pev_timesteps <- params$mass_pev_timesteps - warmup))
@@ -650,7 +664,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             if (massbooster_rep == '-') {
               massboosters <- round(12 * month) # 1 year after 3rd dose 
             } else if (massbooster_rep == '4 annual' | massbooster_rep == '4 annual, no drop') {
-              massboosters <- round(seq(12, 48) * month) # 4 annual boosters after 3rd dose
+              massboosters <- round(seq(12, 48, by = 12) * month) # 4 annual boosters after 3rd dose
             } else if (massbooster_rep == 'annual' | massbooster_rep == 'annual no drop'){
               massboosters <- round(seq(12, (sim_length - program_start)/month, by = 12) * month)
             }
