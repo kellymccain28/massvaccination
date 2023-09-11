@@ -67,20 +67,35 @@ generate_params <- function(inputpath,   # path to input scenarios
     params$prevalence_rendering_max_ages = c(10 * year, 100 * year)
     
     # demography ----------
-    flat_demog <- read.table(paste0(path,'/01_data/Flat_demog.txt')) # from mlgts
-    ages <- round(flat_demog$V3 * year) # top of age bracket
-    deathrates <- flat_demog$V5 / 365   # age-specific death rates
+    # flat_demog <- read.csv(paste0(path,'/01_data/ssa_demography_2021.csv')) # from mlgts
+    # ages <- round(flat_demog$V3 * year) # top of age bracket
+    # deathrates <- flat_demog$V5 / 365   # age-specific death rates
+    # params <- set_demography(
+    #   params,
+    #   agegroups = ages,
+    #   timesteps = 0,
+    #   deathrates = matrix(deathrates, nrow = 1)
+    # )
+    rescale_prob <- function(p, interval_in, interval_out){
+      1 - (1 - p) ^ (interval_out / interval_in)
+    }
     
-    # flat_demog <- read.csv(paste0(HPCpath, "01_data/UN_2022_demog.csv"))#read.table(paste0(HPCpath, "01_data/Flat_demog.txt")) # from mlgts
-    # ages <- round(flat_demog$age_high * year) # top of age bracket
-    # deathrates <- flat_demog$death_rate / 365   # age-specific death rates
+    demog <- read.csv(paste0(HPCpath, '01_data/ssa_demography_2021.csv'))
+    # Age group upper
+    ages <- round(demog$age_upper * 365)
+    # Rescale the deathrates to be on the daily timestep
+    deathrates <- rescale_prob(demog$mortality_rate, 365, 1)
+    # Create matrix of death rates
+    deathrates_matrix <- matrix(deathrates, nrow = length(1), byrow = TRUE)
     
     params <- set_demography(
-      params,
+      parameters = params,
       agegroups = ages,
       timesteps = 0,
-      deathrates = matrix(deathrates, nrow = 1)
+      deathrates = deathrates_matrix
     )
+    
+
     
     # vectors ----------
     # params <- set_species(

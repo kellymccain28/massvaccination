@@ -24,6 +24,7 @@ library(postie) #remotes::install_github("mrc-ide/postie")
 library(ggforce)
 library(forcats)
 library(RColorBrewer)
+library(ggtext)
 
 
 knitr::opts_knit$set(message=FALSE, warning=FALSE)

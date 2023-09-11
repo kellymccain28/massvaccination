@@ -1,7 +1,7 @@
 # Troubleshooting removal of pregnant women
 
 source("02_code/packages_data.R")
-devtools::install_github("ropensci/rdhs")
+# devtools::install_github("ropensci/rdhs")
 library(rdhs)
 
 # What are the tags
@@ -25,7 +25,8 @@ sum(pop_country$mean_pop)
 mean(preg_country$Value) # 7.767
 median(preg_country$Value) # 7.9
 # let's say 7.8% of women between 15 and 49 are pregnant 
-
+summ <- preg_country %>% group_by(CountryName) %>% summarize(mean_preg = mean(Value))
+mean(summ$mean_preg)
 ## make a call with no arguments
 # sc <- dhs_survey_characteristics()
 # sc[grepl("Preg" , sc$SurveyCharacteristicName) | grepl("Wome" , sc$SurveyCharacteristicName), ]
