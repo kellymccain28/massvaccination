@@ -79,7 +79,7 @@ PEVcov <- c(0, 0.8)
 # RTSSboost <- c(0, 1)
 
 # PEV age group
-PEVage <- c('-', '5-15', '5-9', '5-100', '5m-5y','5m-3y')#, '5m-15y')#,'5-17m', 
+PEVage <- c('-', '5-15', '5-9', '5-100', '5m-5y','5m-3y', '5m-15y')#,'5-17m', 
 
 # Rounds of PEV mass vaccination
 PEVrounds <- c('-','single','3yrs') #, '5yrs'

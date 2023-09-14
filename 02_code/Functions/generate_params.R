@@ -440,7 +440,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             timesteps = pevtimesteps,
             coverages = PEVcov,
             age = round(5 * month),
-            min_wait = 0,
+            min_wait = 20 * year,
             booster_timestep = EPIboosters,
             booster_coverage = EPIboost_cov,
             booster_profile = list(rtss_booster_4th),
@@ -467,7 +467,7 @@ generate_params <- function(inputpath,   # path to input scenarios
           
           if (PEVrounds == 'single'){
             pevtimesteps <- c(first)
-            min_wait <- 0
+            min_wait <- 20 * year
           } else if (PEVrounds == '1yr'){
             pevtimesteps <- c(first, first + seq(1 * year, sim_length, 1 * year))
             min_wait <- 20 * year
@@ -742,7 +742,7 @@ generate_params <- function(inputpath,   # path to input scenarios
               timesteps = pevtimesteps,
               coverages = PEVcov,
               age = round(5 * month),
-              min_wait = 0,
+              min_wait = 20 * year,
               booster_timestep = EPIboosters,
               booster_coverage = EPIboost_cov,
               booster_profile = list(r21_booster_profile),
@@ -775,7 +775,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             
             if (PEVrounds == 'single'){
               pevtimesteps <- c(first)
-              min_wait <- 0
+              min_wait <- 20 * year
             } else if (PEVrounds == '1yr'){
               pevtimesteps <- c(first, first + seq(1 * year, sim_length, 1 * year))
               min_wait <- 20 * year
