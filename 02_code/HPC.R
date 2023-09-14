@@ -19,7 +19,7 @@ sim_length <- 25*year  # value > 0  # should update from 21 to 25 years so that 
 
 # number of parameter draws
 # 0 = use mean values, 1 to 50 = draws
-drawID <- c(0, 942,  40, 541, 497, 877, 697, 400, 450, 806, 
+drawID <- c(942,  40, 541, 497, 877, 697, 400, 450, 806, #0, 
             600, 670, 363, 838, 478, 403, 375, 335, 598, 142,
             919, 444, 986, 659,  71, 457, 891, 188, 432, 975, 
             488, 867, 538, 912, 534, 215, 540, 866, 613, 973, 
@@ -70,7 +70,7 @@ SMC <- c(0)
 PEV <- c('none','RTSS','R21')
 
 # PEV strategy
-PEVstrategy <- c('none', 'AB', 'hybrid', 'catch-up', 'mass')#SVmass+AB', 'SVmass+hybrid', 'mass+AB') #, 'SV'
+PEVstrategy <- c('none', 'AB', 'hybrid', 'SV','catch-up', 'mass')#SVmass+AB', 'SVmass+hybrid', 'mass+AB') #, 'SV'
 
 # PEV coverage
 PEVcov <- c(0, 0.8)
@@ -79,7 +79,7 @@ PEVcov <- c(0, 0.8)
 # RTSSboost <- c(0, 1)
 
 # PEV age group
-PEVage <- c('-', '5-15', '5-9', '5-100')#,'5-17m', 
+PEVage <- c('-', '5-15', '5-9', '5-100', '5m-5y','5m-3y')#, '5m-15y')#,'5-17m', 
 
 # Rounds of PEV mass vaccination
 PEVrounds <- c('-','single','3yrs') #, '5yrs'
@@ -91,13 +91,38 @@ PEVrounds <- c('-','single','3yrs') #, '5yrs'
 EPIbooster <- c('12m', '12m boost', '18m', 'seasonal', '-')
 
 # Extra boosters for EPI 
-EPIextra <- c('5y', '10y', '-')
+EPIextra <- c('5y', '10y', '5y+10y', '-')
 
-# adding vaccine boosters: 0 - no fifth dose, fifth (2 booster doses), annual (every year), 6mo (every 6 months), 2yrs (every 2 years)
-massbooster_rep <- c('-', '4 annual', 'annual', '4 annual, no drop', 'annual no drop')
+# adding vaccine boosters:  - is only 4th dose,  annual (every year), 4 annual (every year for 4 years)
+massbooster_rep <- c('-', '4 annual', 'annual')#'4 annual', 'annual', 
 
 
 interventions <- crossing(treatment, SMC, PEV, PEVstrategy, PEVcov, PEVage, PEVrounds, EPIbooster, EPIextra, massbooster_rep, MDA)
+
+interventions <- interventions %>%
+  filter(!(PEV == 'none' & PEVstrategy %in% c('AB', 'hybrid','catch-up', 'mass', 'SV'))) |>
+  filter(!(PEV %in% c('R21', 'RTSS') & PEVstrategy == 'none')) |> 
+  filter(!(PEV == 'R21' & EPIbooster %in% c('12m boost', '18m'))) |> # only 12 month booster
+  filter(!(PEVstrategy == 'none' & EPIbooster %in% c('12m', '12m boost', '18m', 'seasonal'))) |> # If no vaccination, then no EPI boosters
+  filter(!(PEVstrategy %in% c('none', 'mass') & EPIextra %in% c('5y', '10y', '5y+10y'))) |> #no extra epi boosters if no vax or if only mass
+  filter(!(PEVstrategy == 'none' & PEVrounds %in% c('3yrs','single'))) |> # no rounds of PEVs if no vaccination
+  filter(!(PEVstrategy == 'none' & PEVage %in% c('5-15', '5-9', '5-100', '5m-5y','5m-9y', '5m-15y', '5m-3y'))) |> # if no vaccine, then age groups are irrelevant
+  filter(!(PEVstrategy %in% c('AB', 'hybrid', 'SV') & PEVage %in% c('5-15', '5-9', '5-100', '5m-5y','5m-9y', '5m-15y', '5m-3y'))) |> # with EPI vax, no age groups specified
+  filter(!(PEVstrategy == 'catch-up' & PEVage %in% c('-', '5-100'))) |> # catch-up vax to only 5-19 or 5-15, or 5m-5y, 5m-15y, 5m-9y
+  filter(!(PEVstrategy == 'mass' & PEVage %in% c('5-15', '5-9', '-', '5m-5y','5m-9y', '5m-15y', '5m-3y'))) |> # mass vax only to 5-100
+  filter(!(PEVstrategy %in% c('AB', 'hybrid', 'catch-up', 'SV') & PEVrounds %in% c('single','3yrs', '5yrs'))) |> # AB and hybrid would not have repeated mass rounds 
+  filter(!(PEVstrategy == 'AB' & EPIbooster %in% c('seasonal','-'))) |> # no seasonal boosters for AB
+  filter(!((PEV == 'RTSS' & PEVstrategy == 'catch-up') & EPIbooster %in% c('-', '12m', '18m','seasonal'))) |> # always has an EPI booster timing of 12 m boost
+  filter(!((PEV == 'R21' & PEVstrategy == 'catch-up') & EPIbooster %in% c('-', '12m boost', '18m','seasonal'))) |> # always has an EPI booster timing of 12 m boost
+  filter(!(PEVstrategy == 'hybrid' & EPIbooster %in% c('12m', '12m boost', '18m','-'))) |> # hybrid vaccination will not have these boosters
+  filter(!(PEVstrategy == 'mass' & EPIbooster %in% c('12m', '12m boost', '18m','seasonal'))) |> # mass vaccination doesn't have epi boosters
+  filter(!(PEVstrategy == 'SV' & EPIbooster %in% c('12m', '12m boost', '18m','-'))) |> # seasonal vaccination will not have these boosters
+  filter(!(PEVstrategy %in% c('AB', 'hybrid','mass', 'SV','none') & EPIextra %in% c('5y','10y','5y+10y'))) |> # only catch-up vax gets extra boosters
+  filter(!(PEVstrategy %in% c('AB', 'hybrid','catch-up', 'SV') & MDA == 1)) |># MDA is only to PEVstrategy == none and PEVstrategy ==mass 
+  filter(!(PEVstrategy %in% c('AB', 'hybrid','catch-up', 'mass', 'SV') & PEVcov == 0)) |> # if vaccination, then coverage is not 0
+  filter(!(PEVstrategy == 'none' & PEVcov == 0.8)) |>
+  filter(!(PEVstrategy == 'mass' & PEVrounds == '-')) |># this means the same thing as single 
+  filter(!(PEVstrategy %in% c('none', 'catch-up', 'hybrid', 'AB', 'SV') & massbooster_rep %in% c('4 annual', 'annual', '4 annual, no drop', 'annual no drop'))) # only mass booster repetition in mass scenarios 
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
@@ -105,30 +130,9 @@ combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, int
 
 # remove non-applicable scenarios 
 combo <- combo |>
-  filter(!(PEV == 'none' & PEVstrategy %in% c('AB', 'hybrid','catch-up', 'mass'))) |>
-  filter(!(PEV %in% c('R21', 'RTSS') & PEVstrategy == 'none')) |> 
-  filter(!(PEV == 'R21' & EPIbooster %in% c('12m boost', '18m'))) |> # only 12 month booster
-  filter(!(PEVstrategy == 'none' & EPIbooster %in% c('12m', '12m boost', '18m', 'seasonal'))) |> # If no vaccination, then no EPI boosters
-  filter(!(PEVstrategy %in% c('none', 'mass') & EPIextra %in% c('5y', '10y'))) |> #no extra epi boosters if no vax or if only mass
-  filter(!(PEVstrategy == 'none' & PEVrounds %in% c('3yrs','single'))) |> # no rounds of PEVs if no vaccination
-  filter(!(PEVstrategy == 'none' & PEVage %in% c('5-15', '5-9', '5-100'))) |> # if no vaccine, then age groups are irrelevant
-  filter(!(PEVstrategy %in% c('AB', 'hybrid') & PEVage %in% c('5-15', '5-9', '5-100'))) |> # with EPI vax, no age groups specified
-  filter(!(PEVstrategy == 'catch-up' & PEVage %in% c('-', '5-100'))) |> # catch-up vax to only 5-19 or 5-15
-  filter(!(PEVstrategy == 'mass' & PEVage %in% c('5-15', '5-9', '-'))) |> # mass vax only to 5-100
-  filter(!(PEVstrategy %in% c('AB', 'hybrid', 'catch-up') & PEVrounds %in% c('single','3yrs', '5yrs'))) |> # AB and hybrid would not have repeated mass rounds 
-  filter(!(PEVstrategy == 'AB' & EPIbooster %in% c('seasonal','-'))) |> # no seasonal boosters for AB
-  filter(!((PEV == 'RTSS' & PEVstrategy == 'catch-up') & EPIbooster %in% c('-', '12m', '18m','seasonal'))) |> # always has an EPI booster timing of 12 m boost
-  filter(!((PEV == 'R21' & PEVstrategy == 'catch-up') & EPIbooster %in% c('-', '12m boost', '18m','seasonal'))) |> # always has an EPI booster timing of 12 m boost
-  filter(!(PEVstrategy == 'hybrid' & EPIbooster %in% c('12m', '12m boost', '18m','-'))) |> # hybrid vaccination will not have these boosters
-  filter(!(PEVstrategy == 'mass' & EPIbooster %in% c('12m', '12m boost', '18m','seasonal'))) |> # mass vaccination doesn't have epi boosters
-  filter(!(PEVstrategy %in% c('AB', 'hybrid','mass', 'none') & EPIextra %in% c('5y','10y'))) |> # only catch-up vax gets extra boosters
   filter(!(seas_name == 'perennial' & PEVstrategy == 'hybrid')) |> # no hybrid vaccination in perennial settings 
-  filter(!(PEVstrategy %in% c('AB', 'hybrid','catch-up') & MDA == 1)) |># MDA is only to PEVstrategy == none and PEVstrategy ==mass 
-  filter(!(PEVstrategy %in% c('AB', 'hybrid','catch-up', 'mass') & PEVcov == 0)) |> # if vaccination, then coverage is not 0
-  filter(!(PEVstrategy == 'none' & PEVcov == 0.8)) |>
-  filter(!(PEVstrategy == 'mass' & PEVrounds == '-')) |># this means the same thing as single 
-  filter(!(PEVstrategy %in% c('none', 'catch-up', 'hybrid', 'AB') & massbooster_rep %in% c('4 annual', 'annual', '4 annual, no drop', 'annual no drop'))) # only mass booster repetition in mass scenarios 
-  
+  filter(!(seas_name == 'perennial' & PEVstrategy == 'SV'))  # no seasonal vaccination in perennial settings 
+    
 # put variables into the same order as function arguments
 combo <- combo |> 
   select(population,        # simulation population
@@ -151,8 +155,7 @@ combo <- combo |>
          MDA,               # MDA coverage
          ID,                # name of output file
          drawID             # parameter draw no.
-  ) |> as.data.frame()# |>
-  # filter(PEV == 'RTSS' | PEV == 'none') 
+  ) |> as.data.frame()
 
 # Check that it looks right 
 check <- combo %>% group_by(PEV, PEVstrategy, PEVage, EPIextra, EPIbooster, massbooster_rep, PEVrounds, MDA) %>% summarize(n = n())
@@ -162,13 +165,22 @@ check <- combo %>% group_by(PEV, PEVstrategy, PEVage, EPIextra, EPIbooster, mass
 # new <- combo |> filter(massbooster_rep=='annual')
 # combo <- rbind(combo, new)
 
-saveRDS(combo, paste0(path, '03_output/scenarios_torun_RTSS.rds'))
-# combo <- readRDS(paste0(path, '03_output/scenarios_torun_R21.rds'))
+rtsscombo <- combo %>%
+  filter(PEV == 'RTSS' | PEV == 'none') 
+saveRDS(rtsscombo, paste0(path, '03_output/scenarios_torun_RTSS.rds'))
+
+r21combo <- combo %>%
+  filter(PEV == 'R21' | PEV == 'none') 
+saveRDS(r21combo, paste0(path, '03_output/scenarios_torun_R21.rds'))
+
 # generate parameter list in malariasimulation format
 source(paste0(path, '02_code/Functions/generate_params.R'))
 
 generate_params(paste0(path, '03_output/scenarios_torun_RTSS.rds'), # file path to pull
                 paste0(HPCpath, "03_output/parameters_torun_RTSS.rds"))      # file path to push
+
+generate_params(paste0(path, '03_output/scenarios_torun_R21.rds'), # file path to pull
+                paste0(HPCpath, "03_output/parameters_torun_R21.rds"))      # file path to push
 
 ## Setting up cluster ------------------------------------------------------------------------------------------------
 setwd(HPCpath)
@@ -180,8 +192,8 @@ setwd(HPCpath)
 share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")#'kem22','Q:','//qdrive.dide.ic.ac.uk/homes','Q:')
 
 config <- didehpc::didehpc_config(credentials = list(
-  username = 'kem22',#Sys.getenv("DIDE_USERNAME"),
-  password = 'pwdRease1449!'),#Sys.getenv("DIDE_PASSWORD")),
+  username = Sys.getenv("DIDE_USERNAME"),
+  password = Sys.getenv("DIDE_PASSWORD")),
   workdir = HPCpath,
   shares = share,
   use_rrq = FALSE,

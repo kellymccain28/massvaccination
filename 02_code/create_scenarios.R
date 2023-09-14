@@ -1,11 +1,11 @@
-source('02_code/packages_data.R')
+source(paste0(HPCpath,'02_code/packages_data.R'))
 
 # MODEL set-up ----
 # year
 year <- 365
 
 # population
-population <- 10000
+population <- 50000
 
 # run time
 warmup <- 12 * year       # needs to be multiple of 3 for ITN distribution
@@ -13,8 +13,11 @@ sim_length <- 12 * year   # value > 0
 
 # number of parameter draws
 # 0 = use mean values, 1 to 50 = draws
-drawID <- c(0, 942,  40, 541, 497, 877, 697, 400, 450, 806, 600, 670, 363, 838, 478, 403, 375, 335, 598, 142, 919, 444, 986, 659,  71, 457,
-            891, 188, 432, 975, 488, 867, 538, 912, 534, 215, 540, 866, 613, 973, 917, 937, 931, 296, 835, 328, 147, 701, 889, 708, 888)# c(0, 1:50)
+drawID <- c(942,  40, 541, 497, 877, 697, 400, 450, 806, #0, 
+            600, 670, 363, 838, 478, 403, 375, 335, 598, 142,
+            919, 444, 986, 659,  71, 457, 891, 188, 432, 975, 
+            488, 867, 538, 912, 534, 215, 540, 866, 613, 973, 
+            917, 937, 931, 296, 835, 328, 147, 701, 889, 708, 888)# c(0, 1:50)
 
 # SITE set-up ----
 # parasite prevalence 2-10 year olds
@@ -43,56 +46,44 @@ speciesprop <- data.frame(speciesprop = rbind(list(c(0.25, 0.25, 0.5))),
                           row.names = NULL)
 
 # INTERVENTIONS ----
-# ITN type: pyr, pbo
-ITN <- c('pyr') 
-
-# ITN usage
-ITNuse <- c(0)#0.25, 0.50, 
-
-# boosting ITN use by 10%: 0, 1
-ITNboost <- c(0) 
-
-# insecticide resistance level: 0, 0.4, 0.8
-resistance <- c(0) 
-
-# IRS coverage
-IRS <-  c(0)
-
 # treatment coverage
 treatment <- c(0.45) 
 
 # SMC: 0, 1
 SMC <- c(0) 
 
-# MDAcoverage
-MDAcov <- c(0)
+# MDA y/n
+MDA <- c(0)
 
-# MDA timing
-MDAtiming <- c('none') #'prior', , 'after'
+# Which vaccine
+PEV <- c('none') 
 
-# RTS,S: none, EPI, SV, hybrid
-RTSS <- c('none') 
+# Vaccination strategy
+PEVstrategy <- c('none')
 
-# RTS,S age group
-RTSSage <- c(0)#c('all children','everyone','school-aged','under 5s','young children')
+# Age group
+PEVage <- c('-')
 
-# RTS,S coverage
-RTSScov <- c(0) 
+# PEV coverage
+PEVcov <- c(0) 
 
-# RTSS rounds
-RTSSrounds <- c('none')
+# Rounds of PEV mass vaccination
+PEVrounds <- c('-')
 
-# adding a fifth RTS,S dose: 0, 1
-fifth <- c(0)  
+# EPI booster timing 
+EPIbooster  <- c('-')  
 
+# Extra boosters for EPI 
+EPIextra <- c('-')
+  
 # adding vaccine boosters: 0 - no fifth dose, fifth (2 booster doses), annual (every year), 6mo (every 6 months), 2yrs (every 2 years)
-booster_rep <- c(0)
+massbooster_rep <- c('-')
 
-interventions <- crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, RTSSage, RTSSrounds, fifth, MDAcov, MDAtiming)
+interventions <- crossing(treatment, SMC, PEV, PEVstrategy, PEVcov, PEVage, PEVrounds, EPIbooster, EPIextra, massbooster_rep, MDA)
 
 # create combination of all runs 
 combo <- crossing(population, pfpr, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
-  mutate(ID = paste(pfpr, seas_name, ITNuse, drawID, sep = "_")) #, RTSSage
+  mutate(ID = paste(pfpr, seas_name, "0", drawID, sep = "_")) #, RTSSage
 
 # put variables into the same order as function arguments
 combo <- combo |> 
@@ -103,20 +94,17 @@ combo <- combo |>
          warmup,            # warm-up period
          sim_length,        # length of simulation run
          speciesprop,       # proportion of each vector species
-         ITN,               # ITN type
-         ITNuse,            # ITN usage
-         ITNboost,          # if ITN usage is boosted by 10%
-         resistance,        # resistance level
-         IRS,               # IRS coverage
          treatment,         # treatment coverage
          SMC,               # SMC coverage
-         RTSS,              # RTS,S strategy
-         RTSScov,           # RTS,S coverage
-         RTSSage,           # RTS,S age groups
-         RTSSrounds,        # RTS,S rounds of mass vax
-         fifth,             # status of 5th dose for mass or hybrid strategies
-         MDAcov,            # MDA coverage
-         MDAtiming,         # timing of MDA round
+         PEV,               # Which PEV
+         PEVstrategy,       # PEV strategy
+         PEVcov,            # PEV coverage
+         PEVage,            # PEV age groups
+         PEVrounds,         # PEV rounds of mass vax
+         EPIbooster,        # Timing of EPI booster 
+         EPIextra,          # Extra EPI boosters for catch-up campaigns 
+         massbooster_rep,   # how many mass boosters
+         MDA,               # MDA coverage
          ID,                # name of output file
          drawID             # parameter draw no.
   ) |> as.data.frame()
@@ -139,8 +127,8 @@ setwd(HPCpath)
 share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")#'kem22','Q:','//qdrive.dide.ic.ac.uk/homes','Q:')
 
 config <- didehpc::didehpc_config(credentials = list(
-  username = Sys.getenv("DIDE_USERNAME"),
-  password = Sys.getenv("DIDE_PASSWORD")),
+  username = 'kem22',#Sys.getenv("DIDE_USERNAME"),
+  password = 'pwdRease1449!'),#Sys.getenv("DIDE_PASSWORD")),
   workdir = HPCpath,
   shares = share,
   use_rrq = FALSE,
@@ -163,7 +151,7 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 x <- c(1:nrow(combo)) # baseline scenarios
 
 # define all combinations of scenarios and draws
-index <- tibble(x=x, y = combo$drawID, ID = combo$ID)
+index <- tibble(x=x, y = combo$drawID)#, ID = combo$ID)
 
 # remove ones that have already been run
 index <- index |>
@@ -182,7 +170,7 @@ sjob <- function(x, y){
   print(paste0(x, ' to ', y))
 }
 
-map2_dfr(seq(1, nrow(index)-100, 100),
+map2_dfr(seq(1, nrow(index), 100),
          seq(100, nrow(index), 100),
          sjob)
 # map2_dfr(900,918, sjob)
