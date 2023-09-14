@@ -1,4 +1,4 @@
 # massvaccination
-Modelling mass vaccination of RTSS
+Modelling mass vaccination of malaria vaccines
 
 
