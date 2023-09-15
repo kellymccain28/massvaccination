@@ -211,7 +211,7 @@ ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
 
 obj <- didehpc::queue_didehpc(ctx, config = config)
 # obj$install_packages("github::mrc-ide/malariasimulation@dev")
-
+obj$install_packages("github::mrc-ide/malariasimulation@bug/min_wait")
 # Run tasks -------------------------------------------------------------------------------------------------------------
 combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_test.rds"))
 combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_RTSS.rds"))

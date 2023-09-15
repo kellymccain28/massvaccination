@@ -577,7 +577,7 @@ generate_params <- function(inputpath,   # path to input scenarios
           params <- set_mass_pev(
             parameters = params,
             profile = rtss_profile,
-            timesteps = pevtimesteps,
+            timesteps = pevtimesteps+1,
             coverages = PEVcov,
             min_ages = min_ages,
             max_ages = max_ages,
@@ -860,7 +860,7 @@ generate_params <- function(inputpath,   # path to input scenarios
             params <- set_mass_pev(
               parameters = params,
               profile = r21_profile,
-              timesteps = pevtimesteps,
+              timesteps = pevtimesteps+1,
               coverages = rep(PEVcov, length(pevtimesteps)),
               min_ages = min_ages,
               max_ages = max_ages,
