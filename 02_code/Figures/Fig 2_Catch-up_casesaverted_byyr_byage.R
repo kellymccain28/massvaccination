@@ -1,8 +1,9 @@
 #Fig 2 - cases averted over tiem by age group per 1000 doses (based on plot_cases_Averted_byyr.R)
+source(paste0(HPCpath, '02_code/Functions/outcomes_averted.R'))
 
-df <- readRDS(paste0(HPCpath, 'HPC_R21', '/summbyyrbyagelimited_draws.rds')) %>% 
+df <- readRDS(paste0(HPCpath, 'Old demography/HPC_R21', '/summbyyrbyagelimited_draws.rds')) %>% 
   outcomes_averted(byyear = TRUE)
-
+HPCfolder <- 'Old demography/HPC_R21'
 
 df_plot <- df %>%
   mutate(strategytype = ifelse(PEVstrategy == "AB" | PEVstrategy == 'hybrid', 'Routine',
@@ -10,15 +11,10 @@ df_plot <- df %>%
                                       ifelse(PEVstrategy == 'mass', 'Mass',
                                              ifelse(PEVstrategy == 'none','No vaccine', NA))))) %>%
   # Filter to strategy type
-  filter(strategytype == 'Catch-up') %>%
+  filter(strategytype == 'Catch-up' | PEVstrategy == 'AB') %>%
   # Filter to be only 1 seasonality type 
   filter(seasonality == 'seasonal') %>%
   filter(PEV !='none') %>%
-  # select(-c(dose1_lower, dose1_upper, dose2_lower, dose2_upper, dose3_lower, dose3_upper, dose4_lower, dose4_upper,
-  #           dose5_lower, dose5_upper, dose6_lower, dose6_upper, dose7_lower, dose7_upper, dose8_lower, dose8_upper,
-  #           dose9_lower, dose9_upper, dose10_lower, dose10_upper, dose11_lower, dose11_upper, dose12_lower, dose12_upper,
-  #           dose13_lower, dose13_upper, dose14_lower, dose14_upper, dose15_lower, dose15_upper, dose16_lower, dose16_upper,
-  #           dose17_lower, dose17_upper, dose18_lower, dose18_upper, dose19_lower, dose19_upper)) %>%
   mutate(alldoses = sum(across(starts_with("dose")), na.rm = TRUE)) %>%
   mutate(label_int = paste(PEVstrategy, PEVage, PEVrounds, EPIbooster, EPIextra, massbooster_rep),
          labels = case_when(label_int == "AB - - 12m - -"  ~ 'Age-based, 12m booster',
@@ -44,22 +40,32 @@ df_plot <- df %>%
          EPIextra_labels = case_when(EPIextra == '-'~ '12m only', 
                                      EPIextra == '5y' ~ '12m + 5y',
                                      EPIextra == '10y'~ '12m + 10y'),
-         EPIextra_labels = factor(EPIextra_labels, levels = c('12m only', '12m + 5y', '12m + 10y'))) %>%
+         EPIextra_labels = factor(EPIextra_labels, levels = c('12m only', '12m + 5y', '12m + 10y')),
+         scen_labels = case_when(EPIextra == '-' & PEVstrategy == 'catch-up' ~ 'Catch-up with \n12m AB booster',
+                                 EPIextra == '-' & PEVstrategy == 'AB' ~ 'Age-based only',
+                                 EPIextra == '5y' ~ 'Catch-up with \n12m, 5y AB boosters',
+                                 EPIextra == '10y' ~ 'Catch-up with \n12m, 10y AB boosters'),
+         scen_labels = factor(scen_labels, levels = c('Age-based only','Catch-up with \n12m AB booster', 'Catch-up with \n12m, 5y AB boosters',
+                                                      'Catch-up with \n12m, 10y AB boosters'))) %>%
   mutate(across(cases_averted, 
                 ~ .x / alldoses * 1000, .names = "{.col}_perdose"),
          across(cases_averted, 
                 ~ .x / dose3 * 1000, .names = "{.col}_perFVC"),
+         across(cases_averted, 
+                ~ .x / n * 1000, .names = "{.col}_perpop"),
          # AB
          across(ABcases_averted, 
                 ~ .x / alldoses * 1000, .names = "{.col}_perdose"),
          across(ABcases_averted, 
-                ~ .x / dose3 * 1000, .names = "{.col}_perFVC")) |>
+                ~ .x / dose3 * 1000, .names = "{.col}_perFVC"),
+         across(cases_averted, 
+                ~ .x / n * 1000, .names = "{.col}_perpop")) |>
   mutate(age_grp = paste0(age_lower, '-', age_upper),
          age_grp = factor(age_grp, levels = c('0-5','5-10','10-15','0-100')),
          t = t - 5) %>%
-  filter(PEVage == '5-15')%>%
+  filter(PEVage == '5-15' | PEVstrategy == 'AB')%>%
   filter(t >= 0 & pfpr %in% c(0.05, 0.45) & age_grp !='0-100') %>%
-  group_by(EPIextra_labels, labels,age_grp, age_upper, age_lower, t, PEVstrategy, PEVage, PEVrounds, EPIbooster, EPIextra, massbooster_rep, MDA, label_int, pfpr, seasonality) %>%
+  group_by(EPIextra_labels, scen_labels, labels,age_grp, age_upper, age_lower, t, PEVstrategy, PEVage, PEVrounds, EPIbooster, EPIextra, massbooster_rep, MDA, label_int, pfpr, seasonality) %>%
   # Get median, and 95% CrI for each of the variables
   summarize(across(c(clinical:prop_n, starts_with('dose'), alldoses,
                      sevcases, cases,
@@ -71,33 +77,42 @@ df_plot <- df %>%
                    .names = "{.col}_{.fn}") ) %>%
   rename_with(.fn = \(x)sub("_median","", x)) 
 
-compare <- 'AB'
+# compare <- 'AB'
+compare <- ''
 ca_age = ''
 
 # New facet label names for pfpr variable
 pfpr.labs <- c("5%", '45%')
 names(pfpr.labs) <- c("0.05", "0.45")
 
-titletext = paste0("Cases averted over time by age group per 1000 doses")#, " , \n", df_plot$PEV[1], ', ', strategy, ' to children aged ', catchupage, ' years, ', seas, ' setting')
+titletext = paste0("Cases averted over time by age group per 1000 population")#, " , \n", df_plot$PEV[1], ', ', strategy, ' to children aged ', catchupage, ' years, ', seas, ' setting')
 tot <- 'ages'
 variable <- '_perdose'
-# variable <- '_perFVC'
+variable <- '_perFVC'
+variable <- '_perpop'
+
+colors <- brewer.pal(n = 6, name = 'Set1')
 
 anno <- crossing(label = c('5y booster','10y booster'),
-                   pfpr = c(0.05, 0.45),
+                   pfpr = c(0.05),#, 0.45),
                    age_grp = c('0-5','5-10','10-15'))
 anno$age_grp <- factor(anno$age_grp, levels = c('0-5','5-10','10-15'))
-anno$y <- ifelse(anno$pfpr == 0.05, 130, 300)
+anno$y <- ifelse(anno$pfpr == 0.05, 135, 1600)
 anno$x <- ifelse(anno$label == '5y booster', 5.5, 10.5)
 
 plt <- ggplot(df_plot %>% mutate(age_grp = factor(age_grp, levels = c('0-5','5-10','10-15','0-100')))) + 
-  geom_col(aes(x = t, y = .data[[paste0(compare, "cases_averted", ca_age, variable)]], fill = EPIextra_labels), position ='dodge', alpha = 0.7) + #, color = '#17556d'
-  geom_errorbar(aes(x = t, ymin = .data[[paste0(compare, "cases_averted", ca_age,  variable,"_lower")]], 
+  geom_line(aes(x = t, y = .data[[paste0(compare, "cases_averted", ca_age, variable)]], color = scen_labels),
+            linewidth = 0.8
+            # position ='dodge', alpha = 0.7
+            ) + #, color = '#17556d'
+  geom_ribbon(aes(x = t, ymin = .data[[paste0(compare, "cases_averted", ca_age,  variable,"_lower")]], 
                     ymax = .data[[paste0(compare, "cases_averted", ca_age,  variable,"_upper")]], 
-                    color = EPIextra_labels),
-                position = position_dodge(width = 0.9), width = 0.35, linewidth = 0.7) +
+                    fill = scen_labels), alpha = 0.2,
+                # position = position_dodge(width = 0.9), width = 0.35, linewidth = 0.6
+              ) +
   geom_vline(aes(xintercept = 5), linetype = 2, alpha = 0.4) + 
   geom_vline(aes(xintercept = 10), linetype = 2, alpha = 0.4) +
+  geom_hline(aes(yintercept = 0), linetype = 3) +
   geom_text(data = anno, aes(x = x, y = y, label = label), angle = 90) +
   facet_grid(pfpr ~ age_grp, scales = 'free',
              labeller = labeller(pfpr = pfpr.labs)) + 
@@ -105,18 +120,19 @@ plt <- ggplot(df_plot %>% mutate(age_grp = factor(age_grp, levels = c('0-5','5-1
   scale_fill_manual(values = colors) +
   scale_color_manual(values = colors) +
   scale_y_continuous(sec.axis = sec_axis(~ . , name = str2expression(paste("Baseline ", expression(italic(Pf)~PR[2-10]), sep = '~')), breaks = NULL, labels = NULL)) +
-  labs(y = paste0('Cases averted per 1000 doses over time, by age group'),
+  labs(y = paste0('Cases averted per 1000 population over time, by age group'),
        x = 'Year', 
-       fill = 'Age-based\nbooster timing',
+       fill = 'Vaccination\nstrategy',
+       color = 'Vaccination\nstrategy',
        title = titletext,) +
   guides(color = 'none')+ 
-  theme(axis.title = element_text(size = 18),
-        plot.title = element_text(size = 22),
-        legend.text = element_text(size = 13),
-        legend.title = element_text(size = 18),
-        legend.key.size = unit(1.2, 'cm'))
+  theme(axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20),
+        legend.text = element_text(size = 11),
+        legend.title = element_text(size = 15),
+        legend.key.size = unit(1, 'cm'))
 plt
 
-ggsave(paste0(HPCpath, '03_output/', HPCfolder, "/Fig2_", "R21_", "catchup_", seas, ", ", '515_total_', compare,'0.03and0.45byyr.png'), width = 16, height = 8, units = 'in')
+ggsave(paste0(HPCpath, '03_output/', HPCfolder, "/Fig2_", "R21_", "catchup_seasonal_per1000pop", ", ", '515_total_', compare,'0.03and0.45byyr.png'), width = 16, height = 8, units = 'in')
 
 

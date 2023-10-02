@@ -2,7 +2,7 @@
 
 source(paste0('C:/Users/kem22/OneDrive - Imperial College London/PhD Admin/Mass vaccination/massvaccination/02_code/packages_data.R'))
 source(paste0(HPCpath, '02_code/Functions/outcomes_averted.R'))
-HPCfolder = 'HPC_R21'
+HPCfolder = 'Old demography/HPC_R21'
 sim_length <- 7665
 
 
@@ -78,17 +78,21 @@ anno$x <- ifelse(anno$label == '5y booster', 5.5, 10.5)
 
 
 plt <- ggplot(dfpl) + 
+  geom_ribbon(aes(x = age_grp, ymin = cases_perpop_lower, ymax = cases_perpop_upper, group = labels,
+                  fill = labels), alpha = 0.1) +
   geom_line(aes(x = age_grp, y = cases_perpop, group = labels, color = labels), linewidth = 1) + #, color = '#17556d'
   facet_wrap(~ pfpr, scales = 'free',
              labeller = labeller(pfpr = pfpr.labs)) +
   theme_bw() + 
-  geom_vline(aes(xintercept = 5), linetype = 2, alpha = 0.4) + 
-  geom_vline(aes(xintercept = 10), linetype = 2, alpha = 0.4) +
-  geom_text(data = anno, aes(x = x, y = y, label = label), angle = 90) +
+  # geom_vline(aes(xintercept = 5), linetype = 2, alpha = 0.4) + 
+  # geom_vline(aes(xintercept = 10), linetype = 2, alpha = 0.4) +
+  # geom_text(data = anno, aes(x = x, y = y, label = label), angle = 90) +
   scale_color_manual(values = colors) +
+  scale_fill_manual(values = colors) +
   labs(y = 'Cases per person',
        x = 'Age group (years)',
-       color = 'Vaccination strategy') +
+       color = 'Vaccination strategy',
+       fill = 'Vaccination strategy') +
   theme(axis.title = element_text(size = 12),
         plot.title = element_text(size = 18),
         legend.text = element_text(size = 10),
@@ -96,4 +100,4 @@ plt <- ggplot(dfpl) +
         axis.text.x=element_text(angle=90)) 
 plt
 
-ggsave(paste0(HPCpath, '03_output/', HPCfolder, '/Fig1_R21_perperson_515seasonal_.png'), width = 9, height = 4, units = 'in')
+ggsave(paste0(HPCpath, '03_output/', HPCfolder, '/Fig1.5_R21_perperson_515seasonal_.png'), width = 9, height = 4, units = 'in')

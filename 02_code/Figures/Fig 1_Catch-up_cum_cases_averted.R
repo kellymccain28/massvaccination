@@ -14,7 +14,7 @@ df_plot <- df %>%
                                       ifelse(PEVstrategy == 'mass', 'Mass',
                                              ifelse(PEVstrategy == 'none','No vaccine', NA))))) %>%
   # Filter to strategy type
-  filter(strategytype == 'Catch-up') %>%
+  filter(strategytype == 'Catch-up' | strategy == 'AB') %>%
   # Filter to be only 1 seasonality type 
   filter(seasonality == 'seasonal') %>%
   filter(PEV !='none') %>%

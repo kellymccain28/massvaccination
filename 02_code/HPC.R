@@ -79,7 +79,7 @@ PEVcov <- c(0, 0.8)
 # RTSSboost <- c(0, 1)
 
 # PEV age group
-PEVage <- c('-', '5-15', '5-9', '5-100', '5m-5y','5m-3y', '5m-15y')#,'5-17m', 
+PEVage <- c('-', '5-15', '5-9', '5-100', '5m-5y','5m-3y', '5m-15y', '3-5y', '9-15y')#,'5-17m', 
 
 # Rounds of PEV mass vaccination
 PEVrounds <- c('-','single','3yrs') #, '5yrs'
@@ -166,12 +166,14 @@ check <- combo %>% group_by(PEV, PEVstrategy, PEVage, EPIextra, EPIbooster, mass
 # combo <- rbind(combo, new)
 
 rtsscombo <- combo %>%
-  filter(PEV == 'RTSS' | PEV == 'none') 
+  filter(PEV == 'RTSS'| PEV == 'none') 
 saveRDS(rtsscombo, paste0(path, '03_output/scenarios_torun_RTSS.rds'))
 
 r21combo <- combo %>%
   filter(PEV == 'R21' | PEV == 'none') 
 saveRDS(r21combo, paste0(path, '03_output/scenarios_torun_R21.rds'))
+
+
 
 # generate parameter list in malariasimulation format
 source(paste0(path, '02_code/Functions/generate_params.R'))
@@ -198,11 +200,11 @@ config <- didehpc::didehpc_config(credentials = list(
   shares = share,
   use_rrq = FALSE,
   cores = 1,
-  cluster =  "fi--didemrchnb",#"fi--dideclusthn",
-  template = "GeneralNodes",#'8Core',"32Core", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
+  cluster =  "fi--dideclusthn",#"fi--didemrchnb",
+  template = '8Core',#"GeneralNodes","32Core", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
   parallel = FALSE) 
 
-src <- conan::conan_sources(c("github::mrc-ide/malariasimulation"))
+src <- conan::conan_sources(c("github::mrc-ide/malariasimulation@epic/hybrid_pev"))
 
 ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
                              sources = c(paste0(HPCpath, '02_code/Functions/run_simulation.R')),
@@ -211,24 +213,25 @@ ctx <- context::context_save(path = paste0(HPCpath, "contexts"),
 
 obj <- didehpc::queue_didehpc(ctx, config = config)
 # obj$install_packages("github::mrc-ide/malariasimulation@dev")
-obj$install_packages("github::mrc-ide/malariasimulation@bug/min_wait")
+# obj$install_packages("github::mrc-ide/malariasimulation@epic/hybrid_pev")
 # Run tasks -------------------------------------------------------------------------------------------------------------
-combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_test.rds"))
-combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_RTSS.rds"))
+# combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_test.rds"))
+# combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_RTSS.rds"))
 combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_R21.rds"))
-combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_elimination.rds"))
+# combo <- readRDS(paste0(HPCpath, "03_output/parameters_torun_elimination.rds"))
 # x <- c(10,27,37,38, 43,44,79,80,85,86)
 x = c(1:nrow(combo)) # runs
 
-x <- which(combo$massbooster_rep == '4 annual'|combo$massbooster_rep == '4 annual, no drop')
+x <- which(combo$PEVstrategy == 'catch-up' | combo$PEVstrategy == 'none')
+x <- which(combo$PEVstrategy == 'AB' | combo$PEVstrategy == 'SV')
 
-# index <- tibble(x=x)
-ii <- index %>%
- mutate(f = paste0(HPCpath, "HPC_RTSS_wrongorder/raw_modelrun_", index$x, ".rds"))
-catchupfiles <- lapply(ii$f, function(m) readRDS(m)) %>% rbindlist(fill = TRUE, idcol = 'identifier')
-catchupsimpl <- catchupfiles %>% group_by(identifier) %>% slice(1) %>% select(c(PEV, PEVstrategy, PEVage, EPIextra, EPIbooster))
 
-catchupsimpl$catchup <- ifelse(catchupsimpl$PEVstrategy == 'catch-up', 1, 0)
+# ii <- index %>%
+#  mutate(f = paste0(HPCpath, "HPC_RTSS_wrongorder/raw_modelrun_", index$x, ".rds"))
+# catchupfiles <- lapply(ii$f, function(m) readRDS(m)) %>% rbindlist(fill = TRUE, idcol = 'identifier')
+# catchupsimpl <- catchupfiles %>% group_by(identifier) %>% slice(1) %>% select(c(PEV, PEVstrategy, PEVage, EPIextra, EPIbooster))
+# 
+# catchupsimpl$catchup <- ifelse(catchupsimpl$PEVstrategy == 'catch-up', 1, 0)
 
 # x <- x[900:960]
 # x <- which((combo$PEVstrategy == 'mass' & combo$massbooster_rep != '-' & combo$PEVrounds !='single') |
@@ -240,13 +243,13 @@ index <- tibble(x = x)
 
 # remove ones that have already been run
 index <- index |>
-  mutate(f = paste0(HPCpath, "HPC_RTSS/raw_modelrun_", index$x, ".rds")) |>
+  mutate(f = paste0(HPCpath, "HPC_R21/raw_modelrun_", index$x, ".rds")) |>
   mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) |>
   filter(exist == 0) |>
   select(-f, -exist)
 
 # run a test with test scenario
-t <- obj$enqueue_bulk(27, runsim) 
+t <- obj$enqueue_bulk(8901, runsimR21) 
 t$status()
 
 # break tasks to run in groups of 1,000
@@ -267,7 +270,7 @@ t$status()
 # submit jobs, 100 as a time
 sjob <- function(x, y){
 
-  t <- obj$enqueue_bulk(index[x:y,], runsim)
+  t <- obj$enqueue_bulk(index[x:y,], runsimR21)
   print(paste0(x, " to ", y))
 
 }
@@ -275,7 +278,7 @@ sjob <- function(x, y){
 map2_dfr(seq(0, nrow(index) - 100, 100),
          seq(99, nrow(index), 100),
          sjob)
- 
+
 # # submit all remaining tasks
-t <- obj$enqueue_bulk(index, runsim)
+t <- obj$enqueue_bulk(index, runsimR21)
 t$status()
