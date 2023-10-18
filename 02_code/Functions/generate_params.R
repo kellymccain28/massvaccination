@@ -320,7 +320,7 @@ generate_params <- function(inputpath,   # path to input scenarios
         }
         
         # AB 
-        if (PEVstrategy == "AB") {
+        if (PEVstrategy == "AB" & EPIextra != '-') {
           params$pev_doses <- round(c(0, 1.5 * month, 3 * month)) # spacing from Hillary's RTSS work 
           # params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
           
@@ -351,6 +351,52 @@ generate_params <- function(inputpath,   # path to input scenarios
             booster_profile = list(rtss_booster_profile),
             seasonal_boosters = FALSE
           )  
+          
+          print(paste0('EPI timesteps: ', pev_epi_timesteps <- params$pev_epi_timesteps - warmup))
+          print(paste0('EPI booster: ', params$pev_epi_booster_timestep))
+          
+        }
+        
+        if (PEVstrategy == "AB" & EPIextra != '-') {
+          params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
+          
+          if (EPIextra == '5y') {
+            epiboosters <- round(c(12 * month, 5 * year))
+          } else if (EPIextra == '10y') {
+            epiboosters <- round(c(12 * month, 10 * year))
+          } else if (EPIextra == '-') {
+            epiboosters <- round(12 * month)
+          } else if (EPIextra == '5y+10y'){
+            epiboosters <- round(c(12* month, 5*year, 10*year))
+          }
+          
+          epiboost_cov <- c(0.8, rep(1, length(epiboosters)-1))#0.8 * (0.9 ^ (0:(length(epiboosters)-1)))
+          
+          rtss_booster_4th <- rtss_booster_profile
+          rtss_booster_4th$cs <- c(6.37008, 0.35)
+          
+          epiboosterprofiles <- if (length(epiboosters) == 1){ 
+            list(rtss_booster_4th) 
+          } else if (length(epiboosters) == 2){
+            list(rtss_booster_4th, rtss_booster_profile)
+          } else if (length(epiboosters) == 3){
+            list(rtss_booster_4th, rtss_booster_profile, rtss_booster_profile)
+          }
+          
+          pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
+          
+          params <- set_pev_epi(
+            parameters = params,
+            profile = r21_profile,
+            timesteps = pevtimesteps,
+            coverages = PEVcov,
+            age = round(5 * month),
+            min_wait = 0,
+            booster_timestep = epiboosters,
+            booster_coverage = epiboost_cov,
+            booster_profile = epiboosterprofiles,
+            seasonal_boosters = FALSE
+          )
           
           print(paste0('EPI timesteps: ', pev_epi_timesteps <- params$pev_epi_timesteps - warmup))
           print(paste0('EPI booster: ', params$pev_epi_booster_timestep))
@@ -646,7 +692,7 @@ generate_params <- function(inputpath,   # path to input scenarios
           }
           
           # AB
-          if (PEVstrategy == "AB") {
+          if (PEVstrategy == "AB" & EPIextra == '-') {
             params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
             
             epiboosters <- round(12 * month)
@@ -665,6 +711,49 @@ generate_params <- function(inputpath,   # path to input scenarios
               booster_timestep = epiboosters,
               booster_coverage = boost_cov,
               booster_profile = list(r21_booster_profile),
+              seasonal_boosters = FALSE
+            )
+            
+            print(paste0('EPI timesteps: ', pev_epi_timesteps <- params$pev_epi_timesteps - warmup))
+            print(paste0('EPI booster: ', params$pev_epi_booster_timestep))
+            
+          }
+          
+          if (PEVstrategy == "AB" & EPIextra != '-') {
+            params$pev_doses <- round(c(0, 1 * month, 2 * month)) # monthly spacing from phase III R21 trial
+            
+            if (EPIextra == '5y') {
+              epiboosters <- round(c(12 * month, 5 * year))
+            } else if (EPIextra == '10y') {
+              epiboosters <- round(c(12 * month, 10 * year))
+            } else if (EPIextra == '-') {
+              epiboosters <- round(12 * month)
+            } else if (EPIextra == '5y+10y'){
+              epiboosters <- round(c(12* month, 5*year, 10*year))
+            }
+            
+            epiboost_cov <- c(0.8, rep(1, length(epiboosters)-1))#0.8 * (0.9 ^ (0:(length(epiboosters)-1)))
+            
+            epiboosterprofiles <- if (length(epiboosters) == 1){ 
+              list(r21_booster_profile) 
+            } else if (length(epiboosters) == 2){
+              list(r21_booster_profile, r21_booster_profile2)
+            } else if (length(epiboosters) == 3){
+              list(r21_booster_profile, r21_booster_profile2, r21_booster_profile2)
+            }
+            
+            pevtimesteps <- warmup + program_start # starting 5 years after warmup ends
+            
+            params <- set_pev_epi(
+              parameters = params,
+              profile = r21_profile,
+              timesteps = pevtimesteps,
+              coverages = PEVcov,
+              age = round(5 * month),
+              min_wait = 0,
+              booster_timestep = epiboosters,
+              booster_coverage = epiboost_cov,
+              booster_profile = epiboosterprofiles,
               seasonal_boosters = FALSE
             )
             

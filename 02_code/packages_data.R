@@ -1,6 +1,6 @@
 # Loading packages and data and initial parameters 
 
-library(malariasimulation)  
+library(malariasimulation)  #devtools::install_github("mrc-ide/malariasimulation@epic/hybrid_pev")
 library(ggplot2)
 library(mgcv)
 library(malariaEquilibrium)
@@ -29,13 +29,17 @@ library(ggtext)
 
 knitr::opts_knit$set(message=FALSE, warning=FALSE)
 
-`young children` <- 'lightblue'
-`under 5s` <- 'maroon'
-`school-aged` <- 'skyblue4'
-`all children` <- 'palegreen4'
-everyone <- 'tomato3'
-        
-col_SV_models <- list(`young children`, `under 5s`, `school-aged`, `all children`,everyone)
+col515 <- c('#0E6251', '#148F77', '#1ABC9C', '#76D7C4')
+col59 <- c('#4A235A', '#6C3483', '#A569BD', '#D2B4DE')
+col5m15y <- c('#154360', '#1F618D', '#2980B9', '#7FB3D5')
+col5m3y <- c('#7E5109', '#B9770E', '#F39C12', '#F8C471')
+col5m5y <- c('#78281F','#B03A2E', '#E74C3C', '#F1948A')
+colsAB <- c('#186A3B', '#239B56', '#58D68D', '#82E0AA')
+colsSVhybrid <- c('#283747', '#85929E')
+colors <- c(col515, col59, col5m15y, col5m3y, col5m5y, colsAB, colsSVhybrid)
+
+CUcols <- c('#B03A2E','#6C3483','#1F618D','#148F77','#B9770E','#239B56','#283747', 'tan','#85929E')
+
         
 set.seed(1234)
 

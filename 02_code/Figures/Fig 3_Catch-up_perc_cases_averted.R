@@ -3,8 +3,10 @@
 source(paste0('C:/Users/kem22/OneDrive - Imperial College London/PhD Admin/Mass vaccination/massvaccination/02_code/packages_data.R'))
 source(paste0(HPCpath, '02_code/Functions/outcomes_averted.R'))
 
+HPCfolder <- 'HPC_R21'
+
 p_averted <- function(HPCfolder){
-  df <- readRDS(paste0(HPCpath, HPCfolder, '/summarized_draws.rds')) %>%
+  df <- readRDS(paste0(HPCpath, HPCfolder, '/summarized_draws_CU_routine.rds')) %>%
     outcomes_averted() %>%
     select(c(age_lower:MDA, PEVage, age_grp,
              cases, #cases_lower, cases_upper, 
@@ -23,16 +25,16 @@ p_averted <- function(HPCfolder){
               p_DA_med = round(median(p_DA, na.rm = T),1)) %>%
     distinct() %>%
     select(pfpr, PEVage, EPIextra, EPIbooster, int_ID, starts_with('p_CA'), starts_with('p_DA'), seasonality) %>%
-    mutate(ID = interaction(PEVage, EPIextra, sep = "\n"),
-           ID = factor(ID, levels = c('5-15\n-', '5-15\n5y', '5-15\n10y',
-                                      '5-9\n-', '5-9\n5y', '5-9\n10y')))
+    mutate(ID = interaction(PEVage, EPIextra, sep = "\n"))
+           # ID = factor(ID, levels = c('5-15\n-', '5-15\n5y', '5-15\n10y',
+           #                            '5-9\n-', '5-9\n5y', '5-9\n10y')))
   
   return(d)
 }
 
 r21 <- p_averted(HPCfolder = 'HPC_R21')%>% filter(seasonality == 'seasonal')
 # rtss <- p_averted(HPCfolder = 'HPC_RTSS')
-
+r21 <- d %>% filter(seasonality == 'seasonal')
 
 ggplot(r21 ) +
   geom_tile(aes(x = ID, y = as.factor(pfpr), fill = p_CA_med), alpha = 0.7) +
@@ -51,4 +53,4 @@ ggplot(r21 ) +
         legend.title = element_text(size = 18),
         legend.key.size = unit(1.2, 'cm')) 
 
-ggsave(paste0(HPCpath, '03_output/HPC_R21/Fig3_Perc_cases_averted.png'), width = 14, height = 7)
+ggsave(paste0(HPCpath, '03_output/HPC_R21/Fig3_Perc_cases_averted_moreagegroups.png'), width = 14, height = 7)
